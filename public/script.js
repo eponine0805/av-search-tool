@@ -23,7 +23,6 @@ document.addEventListener('DOMContentLoaded', () => {
         searchButton.disabled = true;
 
         try {
-            // Vercelでは関数のパスは /api/ファイル名 となる
             const response = await fetch('/netlift/functions/search', {
                 method: 'POST',
                 headers: {
