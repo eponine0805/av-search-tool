@@ -1,4 +1,0 @@
-[build]
-  command = "" # ビルドコマンドは不要であることを明示
-  publish = "public"
-  functions = "netlify/functions"
