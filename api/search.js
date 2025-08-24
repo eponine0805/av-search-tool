@@ -1,27 +1,17 @@
-// netlify/functions/search.js
+// ファイルパス: netlify/functions/search.js
 
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // APIキーを環境変数から取得
-const GEMINI_API_KEY = process.env.GOOGLE_GEMINI_API_KEY;
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY);
 
-// Geminiモデルを初期化し、JSON出力を強制
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ 
-  model: "gemini-1.5-flash",
-  generationConfig: {
-    responseMimeType: "application/json"
-  }
-});
-
-exports.handler = async (event) => {
-  // POSTメソッド以外は許可しない
+// export const handler と正しく記述します。
+export const handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Method Not Allowed' };
   }
-  
-  // APIキーが設定されていない場合のエラーハンドリング
-  if (!GEMINI_API_KEY) {
+
+  if (!process.env.GOOGLE_GEMINI_API_KEY) {
     return {
       statusCode: 500,
       body: JSON.stringify({ message: 'サーバーエラー: Gemini APIキーが設定されていません。' })
@@ -31,16 +21,24 @@ exports.handler = async (event) => {
   try {
     const { userQuery } = JSON.parse(event.body);
     if (!userQuery) {
-      return { statusCode: 400, body: 'Query is missing' };
+      throw new Error("クエリがありません。");
     }
+
+    // JSON出力を強制する設定を追加
+    const model = genAI.getGenerativeModel({
+      model: "gemini-1.5-flash",
+      generationConfig: {
+        responseMimeType: "application/json",
+      },
+    });
 
     const prompt = `
       あなたは非常に優秀なAV作品の検索エンジンです。
       以下のユーザーの曖昧な記憶を元に、それに合致しそうな架空のAV作品のリストを3つ生成してください。
-
+      
       # ユーザーの記憶:
       "${userQuery}"
-
+      
       # 出力ルール:
       - 必ずJSON配列形式で出力してください。
       - 各作品には以下のキーを含めてください: title, affiliateURL, imageURL, iteminfo, score, reason
@@ -61,14 +59,11 @@ exports.handler = async (event) => {
         }
       ]
     `;
-    
-    // generateContentResponse() を使用し、JSONレスポンスを直接取得
+
     const result = await model.generateContent(prompt);
-    
-    // result.response.text()で直接テキストを取得し、JSONとしてパース
-    const responseText = result.response.text();
-    const finalResults = JSON.parse(responseText);
-    
+    const response = await result.response;
+    const finalResults = JSON.parse(response.text());
+
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
@@ -76,14 +71,10 @@ exports.handler = async (event) => {
     };
 
   } catch (error) {
-    console.error(error);
-    return { 
-      statusCode: 500, 
-      body: JSON.stringify({ 
-        error: 'An error occurred', 
-        details: error.message,
-        stack: error.stack 
-      })
+    console.error("API Error:", error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: error.message }),
     };
   }
 };
