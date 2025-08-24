@@ -17,6 +17,7 @@ export const handler = async (event) => {
       body: JSON.stringify({ message: 'サーバーエラー: Gemini APIキーが設定されていません。' })
     };
   }
+  
 
   try {
     const { userQuery } = JSON.parse(event.body);
