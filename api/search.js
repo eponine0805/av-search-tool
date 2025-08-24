@@ -5,11 +5,17 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 // APIキーを環境変数から取得
 const GEMINI_API_KEY = process.env.GOOGLE_GEMINI_API_KEY;
 
-// Geminiモデルを初期化
+// Geminiモデルを初期化し、JSON出力を強制
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+const model = genAI.getGenerativeModel({ 
+  model: "gemini-1.5-flash",
+  generationConfig: {
+    responseMimeType: "application/json"
+  }
+});
 
 exports.handler = async (event) => {
+  // POSTメソッド以外は許可しない
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Method Not Allowed' };
   }
@@ -17,8 +23,8 @@ exports.handler = async (event) => {
   // APIキーが設定されていない場合のエラーハンドリング
   if (!GEMINI_API_KEY) {
     return {
-        statusCode: 500,
-        body: JSON.stringify({ message: 'サーバーエラー: Gemini APIキーが設定されていません。' })
+      statusCode: 500,
+      body: JSON.stringify({ message: 'サーバーエラー: Gemini APIキーが設定されていません。' })
     };
   }
 
@@ -50,14 +56,17 @@ exports.handler = async (event) => {
         {
           "title": "架空のタイトル1", "affiliateURL": "#",
           "imageURL": { "large": "https://via.placeholder.com/200x300.png?text=Generated+Image" },
-          "iteminfo": { "actress": [{"name": "架空 愛子"}] },
+          "iteminfo": { "actress": [{"name": "架空 花子"}] },
           "score": 98, "reason": "「OL」と「出張」の要素が完全に一致します。"
         }
       ]
     `;
     
+    // generateContentResponse() を使用し、JSONレスポンスを直接取得
     const result = await model.generateContent(prompt);
-    const responseText = result.response.text().trim().replace(/```json/g, '').replace(/```/g, '');
+    
+    // result.response.text()で直接テキストを取得し、JSONとしてパース
+    const responseText = result.response.text();
     const finalResults = JSON.parse(responseText);
     
     return {
@@ -69,13 +78,12 @@ exports.handler = async (event) => {
   } catch (error) {
     console.error(error);
     return { 
-        statusCode: 500, 
-        // エラーオブジェクト全体を文字列にして返す
-        body: JSON.stringify({ 
-            error: 'An error occurred', 
-            details: error.message,
-            stack: error.stack 
-        })
+      statusCode: 500, 
+      body: JSON.stringify({ 
+        error: 'An error occurred', 
+        details: error.message,
+        stack: error.stack 
+      })
     };
   }
 };
