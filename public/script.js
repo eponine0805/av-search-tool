@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
         searchButton.disabled = true;
 
         try {
-            const response = await fetch('/netlift/functions/search', {
+            const response = await fetch('/netlify/functions/search', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
