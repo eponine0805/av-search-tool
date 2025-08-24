@@ -70,7 +70,12 @@ exports.handler = async (event) => {
     console.error(error);
     return { 
         statusCode: 500, 
-        body: JSON.stringify({ error: `An error occurred: ${error.message}` })
+        // エラーオブジェクト全体を文字列にして返す
+        body: JSON.stringify({ 
+            error: 'An error occurred', 
+            details: error.message,
+            stack: error.stack 
+        })
     };
   }
 };
