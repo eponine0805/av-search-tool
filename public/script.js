@@ -24,7 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             // Vercelでは関数のパスは /api/ファイル名 となる
-            const response = await fetch('/api/search', {
+            const response = await fetch('/netlift/functions/search', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
