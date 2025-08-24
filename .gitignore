@@ -1,0 +1,11 @@
+# .gitignore
+
+# Pythonの仮想環境フォルダ
+venv/
+
+# Pythonのキャッシュファイル
+__pycache__/
+
+# Netlifyのローカル設定など
+.netlify/
+node_modules/
