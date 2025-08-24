@@ -1,0 +1,3 @@
+[build]
+  publish = "public"  <-- ★この記述は正しいですか？
+  functions = "netlify/functions"
