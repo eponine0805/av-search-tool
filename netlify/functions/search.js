@@ -48,18 +48,19 @@ exports.handler = async (event) => {
   }
 };
 
-// --- ソクミル検索用の関数 (AI評価なしの安全なバージョン) ---
+// --- ソクミル検索用の関数 (AIによる再評価を削除) ---
 async function searchSokmil(keyword) {
     try {
         const params = new URLSearchParams({
             api_key: SOKMIL_API_KEY,
             keyword: keyword,
-            count: 20
+            count: 20 // 取得件数を増やす
         });
         const response = await fetch(`https://sokmil.com/api/search?${params.toString()}`);
         if (!response.ok) return [];
         const data = await response.json();
         
+        // データを共通の形式に変換して、そのまま返す
         return (data.items || []).map(item => ({
             id: item.id,
             site: 'ソクミル',
@@ -67,10 +68,13 @@ async function searchSokmil(keyword) {
             url: item.url,
             imageUrl: item.thumb,
             maker: item.maker_name,
-            score: 'N/A',
+            score: 'N/A', // スコアはなし
             reason: 'キーワードに一致した作品'
         }));
-    } catch (e) { return []; }
+    } catch (e) { 
+        console.error("Sokmil search failed:", e);
+        return []; 
+    }
 }
 
 // --- DMM(AI生成)用の関数 (以前のブロックされないプロンプトに戻す) ---
