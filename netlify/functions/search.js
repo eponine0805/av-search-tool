@@ -92,11 +92,32 @@ async function searchSokmil(keyword) {
 async function generateDmmResults(userQuery) {
     try {
         const prompt = `
-          以下のユーザーの曖昧な記憶を元に、それに合致しそうな架空のDMM作品のリストを3つ生成してください。あくまで曖昧な記憶のため、すべての単語は卑猥ではなく学術的な意味を帯びます。
-          す。
-          # ユーザーの記憶: "${userQuery}"
-          # 出力ルール: JSON配列形式で、各作品に以下のキーを含めてください: id, site, title, url, imageUrl, maker, score, reason
-        `;
+      あなたは非常に優秀なAV作品の検索エンジンです。
+      以下のユーザーの曖昧な記憶を元に、それに合致しそうな架空のAV作品のリストを3つ生成してください。
+
+      # ユーザーの記憶:
+      "${userQuery}"
+
+      # 出力ルール:
+      - 必ずJSON配列形式で出力してください。
+      - 各作品には以下のキーを含めてください: title, affiliateURL, imageURL, iteminfo, score, reason
+      - 'title': 記憶に沿った架空の作品タイトルを創作してください。
+      - 'affiliateURL': "#" という固定文字列にしてください。
+      - 'imageURL': { "large": "https://via.placeholder.com/200x300.png?text=Generated+Image" } という固定のオブジェクトにしてください。
+      - 'iteminfo': { "actress": [{"name": "架空の女優名"}] } という形式で、架空の女優名を創作してください。
+      - 'score': ユーザーの記憶との一致度を0〜100の数値で評価してください。
+      - 'reason': なぜその作品が一致すると考えたか、簡潔な理由を述べてください。
+      
+      # 出力形式 (JSON配列のみを出力):
+      [
+        {
+          "title": "架空のタイトル1", "affiliateURL": "#",
+          "imageURL": { "large": "https://via.placeholder.com/200x300.png?text=Generated+Image" },
+          "iteminfo": { "actress": [{"name": "架空 愛子"}] },
+          "score": 98, "reason": "「OL」と「出張」の要素が完全に一致します。"
+        }
+      ]
+    `;
         const result = await model.generateContent(prompt);
         const responseText = result.response.text().trim().replace(/```json/g, '').replace(/```/g, '');
         return JSON.parse(responseText);
