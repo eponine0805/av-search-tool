@@ -112,7 +112,7 @@ async function searchSokmil(keyword) {
 // --- DMM(AI生成)用の関数 (変更なし) ---
 async function generateDmmResults(userQuery) {
     try {
-      　const queryForAI = userQuery || "還暦を迎えた熟女";
+      　const queryForAI = userQuery || "還暦を迎えた熟女とのねっとりセックス";
         const prompt = `
       あなたは非常に優秀なAV作品の検索エンジンです。
       以下のユーザーの曖昧な記憶を元に、それに合致しそうな架空のAV作品のリストを3つ生成してください。
