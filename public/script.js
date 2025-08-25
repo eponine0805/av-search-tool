@@ -7,19 +7,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // DMM検索ボタンの処理
     dmmSearchButton.addEventListener('click', () => {
-        // "dmm"という検索タイプを渡して実行
         performSearch('dmm');
     });
 
     // ソクミル検索ボタンの処理
     sokmilSearchButton.addEventListener('click', () => {
-        // "sokmil"という検索タイプを渡して実行
         performSearch('sokmil');
     });
 
     const performSearch = async (searchType) => {
         const query = searchInput.value.trim();
         
+        // ★★★ この部分を修正 ★★★
+        // もし入力が空白なら、アラートを出さずにここで処理を終了する
+        if (!query) {
+            return;
+        }
+        // ★★★ 修正ここまで ★★★
 
         loader.style.display = 'block';
         resultsContainer.innerHTML = '';
@@ -30,7 +34,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch('/.netlify/functions/search', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                // 検索タイプ(dmm or sokmil)もバックエンドに送る
                 body: JSON.stringify({ userQuery: query, type: searchType }),
             });
 
