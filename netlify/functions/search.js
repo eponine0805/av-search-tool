@@ -88,10 +88,9 @@ async function searchSokmil(keyword) {
     } catch (e) { return []; }
 }
 
-// --- DMM(AI生成)用の関数 (以前のブロックされないプロンプトに戻す) ---
+// --- DMM(AI生成)用の関数 (変更なし) ---
 async function generateDmmResults(userQuery) {
     try {
-        // ★★★ このプロンプトを以前のバージョンに戻しました ★★★
         const prompt = `
           以下のユーザーの曖昧な記憶を元に、それに合致しそうな架空のDMM作品のリストを3つ生成してください。
           # ユーザーの記憶: "${userQuery}"
