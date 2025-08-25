@@ -62,10 +62,33 @@ async function searchSokmil(keyword) {
         const data = await response.json();
         
         if (data.items && data.items.length > 0) {
-            const prompt = `ユーザーの記憶とソクミルの作品リストを比較し、各作品に一致度(score)と理由(reason)を追加したJSON配列で出力してください。
+            const prompt = `
+      あなたは非常に優秀なAV作品の検索エンジンです。
+      ユーザーの記憶とソクミルの作品リストを比較し、合致しそうな作品のリストを表示してください。
+      # ユーザーの記憶: "${keyword}"
+      # 作品リスト: ${JSON.stringify(data.items)}
+      # 出力ルール:
+      - 必ずJSON配列形式で出力してください。
+      - 各作品には以下のキーを含めてください: title, affiliateURL, imageURL, iteminfo, score, reason
+      - 'title': 作品のタイトル
+      - 'affiliateURL': "#" という固定文字列にしてください。
+      - 'imageURL': { "large": "https://via.placeholder.com/200x300.png?text=Generated+Image" } という固定のオブジェクトにしてください。
+      - 'iteminfo': { "actress": [{"name": "女優名"}] } という形式で、女優名を入力してください。
+      - 'score': ユーザーの記憶との一致度を0〜100の数値で評価してください。
+      - 'reason': なぜその作品が一致すると考えたか、簡潔な理由を述べてください。
             # ユーザーの記憶: "${keyword}"
             # 作品リスト: ${JSON.stringify(data.items)}
-            # 出力形式 (JSON配列のみ): [{ "id": "作品ID", "score": 90, "reason": "理由" }]`;
+            
+            # 出力形式 (JSON配列のみを出力):
+      [
+        {
+          "title": "タイトル1", "affiliateURL": "#",
+          "imageURL": { "large": "https://via.placeholder.com/200x300.png?text=Generated+Image" },
+          "iteminfo": { "actress": [{"name": "架空 愛子"}] },
+          "score": 98, "reason": "「OL」と「出張」の要素が完全に一致します。"
+        }
+      ]
+    `;
 
             const rankingResult = await model.generateContent(prompt);
             const rankedItems = JSON.parse(rankingResult.response.text().trim().replace(/```json/g, '').replace(/```/g, ''));
