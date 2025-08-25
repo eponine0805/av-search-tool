@@ -13,6 +13,7 @@ exports.handler = async (event) => {
   }
   
   try {
+    // どのボタンが押されたか(type)を受け取る
     const { userQuery, type } = JSON.parse(event.body);
     if (!userQuery) {
       return { statusCode: 400, body: 'Query is missing' };
@@ -48,33 +49,43 @@ exports.handler = async (event) => {
   }
 };
 
-// --- ソクミル検索用の関数 (AIによる再評価を削除) ---
+// --- ソクミル検索用の関数 (変更なし) ---
 async function searchSokmil(keyword) {
     try {
         const params = new URLSearchParams({
             api_key: SOKMIL_API_KEY,
             keyword: keyword,
-            count: 20 // 取得件数を増やす
+            count: 10
         });
         const response = await fetch(`https://sokmil.com/api/search?${params.toString()}`);
         if (!response.ok) return [];
         const data = await response.json();
         
-        // データを共通の形式に変換して、そのまま返す
-        return (data.items || []).map(item => ({
-            id: item.id,
-            site: 'ソクミル',
-            title: item.title,
-            url: item.url,
-            imageUrl: item.thumb,
-            maker: item.maker_name,
-            score: 'N/A', // スコアはなし
-            reason: 'キーワードに一致した作品'
-        }));
-    } catch (e) { 
-        console.error("Sokmil search failed:", e);
-        return []; 
-    }
+        if (data.items && data.items.length > 0) {
+            const prompt = `ユーザーの記憶とソクミルの作品リストを比較し、各作品に一致度(score)と理由(reason)を追加したJSON配列で出力してください。
+            # ユーザーの記憶: "${keyword}"
+            # 作品リスト: ${JSON.stringify(data.items)}
+            # 出力形式 (JSON配列のみ): [{ "id": "作品ID", "score": 90, "reason": "理由" }]`;
+
+            const rankingResult = await model.generateContent(prompt);
+            const rankedItems = JSON.parse(rankingResult.response.text().trim().replace(/```json/g, '').replace(/```/g, ''));
+
+            return rankedItems.map(rankedItem => {
+                const originalItem = data.items.find(p => p.id === rankedItem.id);
+                return {
+                    id: originalItem.id,
+                    site: 'ソクミル',
+                    title: originalItem.title,
+                    url: originalItem.url,
+                    imageUrl: originalItem.thumb,
+                    maker: originalItem.maker_name,
+                    score: rankedItem.score,
+                    reason: rankedItem.reason
+                };
+            });
+        }
+        return [];
+    } catch (e) { return []; }
 }
 
 // --- DMM(AI生成)用の関数 (以前のブロックされないプロンプトに戻す) ---
