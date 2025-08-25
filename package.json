@@ -2,6 +2,7 @@
   "name": "av-search-functions",
   "version": "1.0.0",
   "dependencies": {
-    "@google/generative-ai": "^0.15.0"
+    "@google/generative-ai": "^0.15.0",
+    "cheerio": "^1.0.0-rc.12"
   }
 }
