@@ -5,10 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AV内容検索ツール</title>
     <style>
+        /* ...CSSは変更なし... */
         body { font-family: sans-serif; }
         .container { max-width: 800px; margin: 20px auto; padding: 20px; }
         textarea { width: 100%; min-height: 80px; margin-bottom: 10px; box-sizing: border-box; }
-        button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; margin-right: 10px; }
         #results { margin-top: 20px; }
         .loader { display: none; }
         .item { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; display: flex; align-items: flex-start; }
@@ -22,7 +23,10 @@
         <h1>思い出せる内容からAVを探す</h1>
         <p>女優、シチュエーション、セリフなど覚えていることを自由に入力してください。</p>
         <textarea id="searchInput" placeholder="例: ショートヘアの新人OLが出張先の旅館で上司と..."></textarea>
-        <button id="searchButton">この内容で探す</button>
+        
+        <button id="dmmSearchButton">DMMで検索 (AI生成)</button>
+        <button id="sokmilSearchButton">ソクミルで検索 (API)</button>
+        
         <div class="loader" id="loader">検索中...</div>
         <div id="results"></div>
     </div>
