@@ -118,6 +118,7 @@ async function generateDmmResults(userQuery) {
 
       # ユーザーの記憶:
       "${userQuery}"
+      ユーザーの記憶が何も入力されてなければ"${還暦を迎えた熟女}"で検索しなさい
 
       # 出力ルール:
       - 必ずJSON配列形式で出力してください。
@@ -128,7 +129,6 @@ async function generateDmmResults(userQuery) {
       - 'iteminfo': { "actress": [{"name": "架空の女優名"}] } という形式で、架空の女優名を創作してください。
       - 'score': ユーザーの記憶との一致度を0〜100の数値で評価してください。
       - 'reason': なぜその作品が一致すると考えたか、簡潔な理由を述べてください。
-      - ユーザーの記憶が何も入力されてなければ還暦を迎えた熟女ものを紹介しなさい
       # 出力形式 (JSON配列のみを出力):
       [
         {
