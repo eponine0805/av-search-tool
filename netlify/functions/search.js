@@ -88,16 +88,20 @@ async function searchSokmil(keyword) {
     } catch (e) { return []; }
 }
 
-// --- DMM(AI生成)用の関数 (変更なし) ---
+// --- DMM(AI生成)用の関数 (プロンプトを修正) ---
 async function generateDmmResults(userQuery) {
     try {
+        // ★★★ プロンプトから文脈を特定する単語を減らす ★★★
         const prompt = `
-          あなたはDMMの作品検索エンジンです。以下のユーザーの曖昧な記憶を元に、それに合致しそうな架空のDMM作品のリストを3つ生成してください。
-          # ユーザーの記憶: "${userQuery}"
+          以下のキーワードに合致しそうな、架空の作品リストを3つ生成してください。
+          # キーワード: "${userQuery}"
           # 出力ルール: JSON配列形式で、各作品に以下のキーを含めてください: id, site, title, url, imageUrl, maker, score, reason
         `;
         const result = await model.generateContent(prompt);
         const responseText = result.response.text().trim().replace(/```json/g, '').replace(/```/g, '');
         return JSON.parse(responseText);
-    } catch (e) { return []; }
+    } catch (e) { 
+        console.error("DMM AI generation failed:", e);
+        return []; 
+    }
 }
