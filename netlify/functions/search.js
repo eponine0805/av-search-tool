@@ -1,4 +1,4 @@
-// api/search.js
+// netlify/functions/search.js
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const GEMINI_API_KEY = process.env.GOOGLE_GEMINI_API_KEY;
@@ -53,19 +53,18 @@ exports.handler = async (event) => {
   }
 };
 
-// --- ソクミル検索用の関数 ---
+// --- ソクミルAPI検索用の関数 ---
 async function searchSokmil(keyword) {
     try {
         const params = new URLSearchParams({
             api_key: SOKMIL_API_KEY,
             keyword: keyword,
-            count: 5 // 取得件数を調整
+            count: 5
         });
         const response = await fetch(`https://sokmil.com/api/search?${params.toString()}`);
         if (!response.ok) return [];
         const data = await response.json();
         
-        // AIによる評価を追加
         if (data.items && data.items.length > 0) {
             const prompt = `ユーザーの記憶とソクミルの作品リストを比較し、各作品に一致度(score)と理由(reason)を追加したJSON配列で出力してください。
             # ユーザーの記憶: "${keyword}"
@@ -78,7 +77,7 @@ async function searchSokmil(keyword) {
             return rankedItems.map(rankedItem => {
                 const originalItem = data.items.find(p => p.id === rankedItem.id);
                 return {
-                    ...originalItem, // 元のデータを展開
+                    id: originalItem.id,
                     site: 'ソクミル',
                     title: originalItem.title,
                     url: originalItem.url,
@@ -87,7 +86,7 @@ async function searchSokmil(keyword) {
                     score: rankedItem.score,
                     reason: rankedItem.reason
                 };
-            }).sort((a, b) => b.score - a.score);
+            });
         }
         return [];
     } catch (e) {
@@ -102,7 +101,7 @@ async function generateDmmResults(userQuery) {
         const prompt = `
           あなたはDMMの作品検索エンジンです。以下のユーザーの曖昧な記憶を元に、それに合致しそうな架空のDMM作品のリストを3つ生成してください。
           # ユーザーの記憶: "${userQuery}"
-          # 出力ルール: JSON配列形式で、各作品に以下のキーを含めてください: site, title, url, imageUrl, maker, score, reason
+          # 出力ルール: JSON配列形式で、各作品に以下のキーを含めてください: id, site, title, url, imageUrl, maker, score, reason
         `;
         const result = await model.generateContent(prompt);
         const responseText = result.response.text().trim().replace(/```json/g, '').replace(/```/g, '');
