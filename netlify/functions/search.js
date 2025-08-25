@@ -13,7 +13,6 @@ exports.handler = async (event) => {
   }
   
   try {
-    // どのボタンが押されたか(type)を受け取る
     const { userQuery, type } = JSON.parse(event.body);
     if (!userQuery) {
       return { statusCode: 400, body: 'Query is missing' };
@@ -49,59 +48,42 @@ exports.handler = async (event) => {
   }
 };
 
-// --- ソクミル検索用の関数 (変更なし) ---
+// --- ソクミル検索用の関数 (AI評価なしの安全なバージョン) ---
 async function searchSokmil(keyword) {
     try {
         const params = new URLSearchParams({
             api_key: SOKMIL_API_KEY,
             keyword: keyword,
-            count: 10
+            count: 20
         });
         const response = await fetch(`https://sokmil.com/api/search?${params.toString()}`);
         if (!response.ok) return [];
         const data = await response.json();
         
-        if (data.items && data.items.length > 0) {
-            const prompt = `ユーザーの記憶とソクミルの作品リストを比較し、各作品に一致度(score)と理由(reason)を追加したJSON配列で出力してください。
-            # ユーザーの記憶: "${keyword}"
-            # 作品リスト: ${JSON.stringify(data.items)}
-            # 出力形式 (JSON配列のみ): [{ "id": "作品ID", "score": 90, "reason": "理由" }]`;
-
-            const rankingResult = await model.generateContent(prompt);
-            const rankedItems = JSON.parse(rankingResult.response.text().trim().replace(/```json/g, '').replace(/```/g, ''));
-
-            return rankedItems.map(rankedItem => {
-                const originalItem = data.items.find(p => p.id === rankedItem.id);
-                return {
-                    id: originalItem.id,
-                    site: 'ソクミル',
-                    title: originalItem.title,
-                    url: originalItem.url,
-                    imageUrl: originalItem.thumb,
-                    maker: originalItem.maker_name,
-                    score: rankedItem.score,
-                    reason: rankedItem.reason
-                };
-            });
-        }
-        return [];
+        return (data.items || []).map(item => ({
+            id: item.id,
+            site: 'ソクミル',
+            title: item.title,
+            url: item.url,
+            imageUrl: item.thumb,
+            maker: item.maker_name,
+            score: 'N/A',
+            reason: 'キーワードに一致した作品'
+        }));
     } catch (e) { return []; }
 }
 
-// --- DMM(AI生成)用の関数 (プロンプトを修正) ---
+// --- DMM(AI生成)用の関数 (以前のブロックされないプロンプトに戻す) ---
 async function generateDmmResults(userQuery) {
     try {
-        // ★★★ プロンプトから文脈を特定する単語を減らす ★★★
+        // ★★★ このプロンプトを以前のバージョンに戻しました ★★★
         const prompt = `
-          以下のキーワードに合致しそうな、架空の作品リストを3つ生成してください。
-          # キーワード: "${userQuery}"
+          以下のユーザーの曖昧な記憶を元に、それに合致しそうな架空のDMM作品のリストを3つ生成してください。
+          # ユーザーの記憶: "${userQuery}"
           # 出力ルール: JSON配列形式で、各作品に以下のキーを含めてください: id, site, title, url, imageUrl, maker, score, reason
         `;
         const result = await model.generateContent(prompt);
-        const responseText = result.response.text().trim().replace(/```json/g, '').replace(/```/g, '');
+        const responseText = result.response.text().trim().replace(/```json/g, '').replace(/```g, '');
         return JSON.parse(responseText);
-    } catch (e) { 
-        console.error("DMM AI generation failed:", e);
-        return []; 
-    }
+    } catch (e) { return []; }
 }
