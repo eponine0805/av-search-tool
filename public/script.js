@@ -19,10 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const performSearch = async (searchType) => {
         const query = searchInput.value.trim();
-        if (!query) {
-            alert('検索内容を入力してください。');
-            return;
-        }
+        
 
         loader.style.display = 'block';
         resultsContainer.innerHTML = '';
