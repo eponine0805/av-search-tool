@@ -12,27 +12,23 @@ exports.handler = async (event) => {
     return { statusCode: 405, body: 'Method Not Allowed' };
   }
   
-  if (!GEMINI_API_KEY || !SOKMIL_API_KEY) {
-    return {
-        statusCode: 500,
-        body: JSON.stringify({ message: 'サーバーエラー: APIキーが設定されていません。' })
-    };
-  }
-
   try {
-    const { userQuery } = JSON.parse(event.body);
+    // どのボタンが押されたか(type)を受け取る
+    const { userQuery, type } = JSON.parse(event.body);
     if (!userQuery) {
       return { statusCode: 400, body: 'Query is missing' };
     }
 
-    // --- ソクミル検索とDMM(AI生成)を並行して実行 ---
-    const [sokmilResults, dmmAiResults] = await Promise.all([
-        searchSokmil(userQuery),
-        generateDmmResults(userQuery)
-    ]);
-
-    // 両方の結果を結合
-    const finalResults = [...sokmilResults, ...dmmAiResults];
+    let finalResults = [];
+    if (type === 'dmm') {
+        if (!GEMINI_API_KEY) throw new Error('Gemini APIキーが設定されていません。');
+        finalResults = await generateDmmResults(userQuery);
+    } else if (type === 'sokmil') {
+        if (!SOKMIL_API_KEY) throw new Error('Sokmil APIキーが設定されていません。');
+        finalResults = await searchSokmil(userQuery);
+    } else {
+        throw new Error('無効な検索タイプです。');
+    }
 
     if (finalResults.length === 0) {
       return { statusCode: 200, body: JSON.stringify({ message: "作品が見つかりませんでした。" }) };
@@ -48,18 +44,18 @@ exports.handler = async (event) => {
     console.error(error);
     return { 
         statusCode: 500, 
-        body: JSON.stringify({ error: `An error occurred: ${error.message}`, stack: error.stack })
+        body: JSON.stringify({ error: `An error occurred: ${error.message}` })
     };
   }
 };
 
-// --- ソクミルAPI検索用の関数 ---
+// --- ソクミル検索用の関数 (変更なし) ---
 async function searchSokmil(keyword) {
     try {
         const params = new URLSearchParams({
             api_key: SOKMIL_API_KEY,
             keyword: keyword,
-            count: 5
+            count: 10
         });
         const response = await fetch(`https://sokmil.com/api/search?${params.toString()}`);
         if (!response.ok) return [];
@@ -89,13 +85,10 @@ async function searchSokmil(keyword) {
             });
         }
         return [];
-    } catch (e) {
-        console.error("Sokmil search failed:", e);
-        return [];
-    }
+    } catch (e) { return []; }
 }
 
-// --- DMM(AI生成)用の関数 ---
+// --- DMM(AI生成)用の関数 (変更なし) ---
 async function generateDmmResults(userQuery) {
     try {
         const prompt = `
@@ -106,8 +99,5 @@ async function generateDmmResults(userQuery) {
         const result = await model.generateContent(prompt);
         const responseText = result.response.text().trim().replace(/```json/g, '').replace(/```/g, '');
         return JSON.parse(responseText);
-    } catch (e) {
-        console.error("DMM AI generation failed:", e);
-        return [];
-    }
+    } catch (e) { return []; }
 }
