@@ -112,13 +112,14 @@ async function searchSokmil(keyword) {
 // --- DMM(AI生成)用の関数 (変更なし) ---
 async function generateDmmResults(userQuery) {
     try {
+      　const queryForAI = userQuery || "還暦を迎えた熟女";
         const prompt = `
       あなたは非常に優秀なAV作品の検索エンジンです。
       以下のユーザーの曖昧な記憶を元に、それに合致しそうな架空のAV作品のリストを3つ生成してください。
 
       # ユーザーの記憶:
       "${userQuery}"
-      ユーザーの記憶が何も入力されてなければ"${還暦を迎えた熟女}"で検索しなさい
+      
 
       # 出力ルール:
       - 必ずJSON配列形式で出力してください。
