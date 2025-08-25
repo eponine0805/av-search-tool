@@ -1,69 +1,90 @@
-// ファイルパス: netlify/functions/search.js
+// api/search.js
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+const cheerio = require('cheerio');
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
+const GEMINI_API_KEY = process.env.GOOGLE_GEMINI_API_KEY;
 
-// APIキーを環境変数から取得
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY);
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-// export const handler と正しく記述します。
-export const handler = async (event) => {
+exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Method Not Allowed' };
   }
-
-  if (!process.env.GOOGLE_GEMINI_API_KEY) {
+  
+  if (!GEMINI_API_KEY) {
     return {
-      statusCode: 500,
-      body: JSON.stringify({ message: 'サーバーエラー: Gemini APIキーが設定されていません。' })
+        statusCode: 500,
+        body: JSON.stringify({ message: 'サーバーエラー: Gemini APIキーが設定されていません。' })
     };
   }
-  
 
   try {
     const { userQuery } = JSON.parse(event.body);
     if (!userQuery) {
-      throw new Error("クエリがありません。");
+      return { statusCode: 400, body: 'Query is missing' };
     }
 
-    // JSON出力を強制する設定を追加
-    const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
-      generationConfig: {
-        responseMimeType: "application/json",
-      },
+    // --- AIフェーズ1: DLsite検索用のキーワードを生成 ---
+    const prompt1 = `ユーザーの曖昧な記憶から、DLsiteの検索で使うためのキーワードを5つ以内で生成し、スペース区切りで出力してください。記憶: "${userQuery}"`;
+    const keywordResult = await model.generateContent(prompt1);
+    const searchKeywords = keywordResult.response.text().trim();
+    
+    // --- Webスクレイピングで作品を検索 ---
+    const searchUrl = `https://www.dlsite.com/maniax/fsr/=/language/jp/keyword/${encodeURIComponent(searchKeywords)}/per_page/15/sort/trend/order/desc`;
+
+    const response = await fetch(searchUrl, {
+      headers: {
+        // ★★★ ブラウザからのアクセスに偽装する ★★★
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
+      }
     });
 
-    const prompt = `
-      あなたは非常に優秀なAV作品の検索エンジンです。
-      以下のユーザーの曖昧な記憶を元に、それに合致しそうな架空のアダルト作品のリストを3つ生成してください。
-      
-      # ユーザーの記憶:
-      "${userQuery}"
-      
-      # 出力ルール:
-      - 必ずJSON配列形式で出力してください。
-      - 各作品には以下のキーを含めてください: title, affiliateURL, imageURL, iteminfo, score, reason
-      - 'title': 記憶に沿った架空の作品タイトルを創作してください。
-      - 'affiliateURL': "#" という固定文字列にしてください。
-      - 'imageURL': { "large": "https://via.placeholder.com/200x300.png?text=Generated+Image" } という固定のオブジェクトにしてください。
-      - 'iteminfo': { "actress": [{"name": "架空の女優名"}] } という形式で、架空の女優名を創作してください。
-      - 'score': ユーザーの記憶との一致度を0〜100の数値で評価してください。
-      - 'reason': なぜその作品が一致すると考えたか、簡潔な理由を述べてください。
-      
-      # 出力形式 (JSON配列のみを出力):
-      [
-        {
-          "title": "架空のタイトル1", "affiliateURL": "#",
-          "imageURL": { "large": "https://via.placeholder.com/200x300.png?text=Generated+Image" },
-          "iteminfo": { "actress": [{"name": "架空 花子"}] },
-          "score": 98, "reason": "「OL」と「出張」の要素が完全に一致します。"
-        }
-      ]
-    `;
+    if (!response.ok) {
+        throw new Error(`DLsiteへのアクセスに失敗しました: ${response.statusText}`);
+    }
+    const html = await response.text();
+    const $ = cheerio.load(html);
 
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const finalResults = JSON.parse(response.text());
+    const scrapedProducts = [];
+    $('tr._work').each((i, element) => {
+        const product_name = $(element).find('.work_name a').text().trim();
+        const affiliate_url = $(element).find('.work_name a').attr('href');
+        const thumbnail_url = 'https:' + $(element).find('.work_thumb img').attr('src');
+        const maker_name = $(element).find('.maker_name a').text().trim();
+        const product_id = affiliate_url ? new URL(affiliate_url).pathname.split('/').pop() : null;
+
+        if (product_id) {
+            scrapedProducts.push({ product_id, product_name, maker_name, thumbnail_url, affiliate_url });
+        }
+    });
+
+    if (scrapedProducts.length === 0) {
+      return { statusCode: 200, body: JSON.stringify({ message: "作品が見つかりませんでした。" }) };
+    }
+
+    // --- AIフェーズ2: スクレイピング結果をユーザーの記憶と照合し、ランキング付け ---
+    const prompt2 = `ユーザーの記憶とDLsiteの作品リストを比較し、最も一致度が高いと思われる作品を最大5つまで選んでください。各作品に一致度(score)と理由(reason)を追加したJSON配列で出力してください。
+# ユーザーの記憶:
+"${userQuery}"
+# DLsite作品リスト:
+${JSON.stringify(scrapedProducts)}
+# 出力形式 (JSON配列のみ):
+[
+  { "product_id": "RJ123456", "score": 95, "reason": "記憶にある「キーワード」がタイトルと説明文に含まれています。" }
+]`;
+    
+    const rankingResult = await model.generateContent(prompt2);
+    const rankedItems = JSON.parse(rankingResult.response.text().trim().replace(/```json/g, '').replace(/```/g, ''));
+    
+    const finalResults = rankedItems.map(rankedItem => {
+        const originalItem = scrapedProducts.find(p => p.product_id === rankedItem.product_id);
+        return {
+            ...originalItem,
+            score: rankedItem.score,
+            reason: rankedItem.reason
+        };
+    }).sort((a, b) => b.score - a.score);
 
     return {
       statusCode: 200,
@@ -72,10 +93,10 @@ export const handler = async (event) => {
     };
 
   } catch (error) {
-    console.error("API Error:", error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: error.message }),
+    console.error(error);
+    return { 
+        statusCode: 500, 
+        body: JSON.stringify({ error: `An error occurred: ${error.message}`, stack: error.stack })
     };
   }
 };
