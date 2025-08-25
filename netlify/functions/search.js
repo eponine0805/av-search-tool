@@ -15,9 +15,7 @@ exports.handler = async (event) => {
   try {
     // どのボタンが押されたか(type)を受け取る
     const { userQuery, type } = JSON.parse(event.body);
-    if (!userQuery) {
-      return { statusCode: 400, body: 'Query is missing' };
-    }
+    
 
     let finalResults = [];
     if (type === 'dmm') {
