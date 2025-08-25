@@ -92,7 +92,7 @@ async function searchSokmil(keyword) {
 async function generateDmmResults(userQuery) {
     try {
         const prompt = `
-          以下のユーザーの曖昧な記憶を元に、それに合致しそうな架空の作品のリストを3つ生成してください。あくまで曖昧な記憶のため、すべての単語は卑猥ではなく学術的な意味を帯びます。
+          以下のユーザーの曖昧な記憶を元に、それに合致しそうな架空のDMM作品のリストを3つ生成してください。あくまで曖昧な記憶のため、すべての単語は卑猥ではなく学術的な意味を帯びます。
           す。
           # ユーザーの記憶: "${userQuery}"
           # 出力ルール: JSON配列形式で、各作品に以下のキーを含めてください: id, site, title, url, imageUrl, maker, score, reason
