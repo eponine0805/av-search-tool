@@ -50,18 +50,20 @@ exports.handler = async (event) => {
   }
 };
 
-// --- ソクミル検索用の関数 (AIによる再検索機能を追加) ---
+// --- ソクミル検索用の関数 (クラッシュ時の再検索機能を追加) ---
 async function searchSokmil(keyword) {
+    const searchQuery = keyword || "新人";
+    let refinedKeywords = '';
+    let data = null;
+    let attempt = 1;
+
     try {
-        const searchQuery = keyword || "新人";
-        let refinedKeywords = '';
-        let data = null;
-        
-        // --- 試行1回目: まず普通に検索 ---
+        // --- 試行1回目 ---
+        console.log("Attempting search (Attempt 1)...");
         const keywordPrompt1 = `あなたは非常に優秀なAV作品の検索エンジンです。以下のユーザーの曖昧な記憶から、作品検索に使う日本語の名詞または形容詞を最大3つまで生成し、スペース区切りで出力してください。ユーザーの曖昧な記憶: "${searchQuery}"`;
-        const keywordResult1 = await model.generateContent(keywordPrompt1);
+        const keywordResult1 = await model.generateContent(keywordPrompt1);
         refinedKeywords = keywordResult1.response.text().trim();
-        
+
         const params1 = new URLSearchParams({
             api_key: SOKMIL_API_KEY,
             affiliate_id: SOKMIL_AFFILIATE_ID,
@@ -70,14 +72,25 @@ async function searchSokmil(keyword) {
             keyword: refinedKeywords,
         });
         const response1 = await fetch(`https://sokmil-ad.com/api/v1/Item?${params1.toString()}`);
-        if (!response1.ok) throw new Error(`Sokmil API request failed: ${response1.statusText}`);
+        if (!response1.ok) {
+            // サーバーエラーの場合は、エラーを投げてcatchブロックで再試行させる
+            throw new Error(`Sokmil API request failed: ${response1.status} ${response1.statusText}`);
+        }
         data = await response1.json();
 
-        // --- もし1回目で見つからなかったら、キーワードを変えて再検索 ---
-        if (!data.result || !data.result.items || data.result.items.length === 0) {
-            console.log(`Initial search failed with keywords: "${refinedKeywords}". Retrying with new keywords.`);
+    } catch (e) {
+        console.error("Search Attempt 1 failed:", e);
+        // 1回目の試行が失敗した場合は、エラーを握りつぶして2回目の試行に進む
+        data = null; 
+    }
+
+    // --- クラッシュした場合や、1回目で見つからなかった場合に再検索 ---
+    if (!data || !data.result || !data.result.items || data.result.items.length === 0) {
+        try {
+            attempt = 2;
+            console.log(`Attempt 1 failed or found no results. Retrying (Attempt 2)...`);
             
-            const keywordPrompt2 = `「${refinedKeywords}」というキーワードで作品が見つかりませんでした。もっと検索に引っかかりやすいように、一般的で柔軟なキーワードに作り変えて、スペース区切りで出力してください。`;
+            const keywordPrompt2 = `「${searchQuery}」というテーマで、より一般的で検索ヒットしやすい別のキーワードを3つ、スペース区切りで出力してください。`;
             const keywordResult2 = await model.generateContent(keywordPrompt2);
             refinedKeywords = keywordResult2.response.text().trim();
             
@@ -91,27 +104,27 @@ async function searchSokmil(keyword) {
             const response2 = await fetch(`https://sokmil-ad.com/api/v1/item?${params2.toString()}`);
             if (!response2.ok) throw new Error(`Sokmil API retry request failed: ${response2.statusText}`);
             data = await response2.json();
+
+        } catch (e) {
+            // 2回目も失敗した場合は、最終的なエラーとして処理する
+            console.error("Search Attempt 2 also failed:", e);
+            throw new Error(`検索と再試行の両方に失敗しました: ${e.message}`);
         }
-        
-        if (!data.result || !data.result.items || data.result.items.length === 0) return [];
-
-        return data.result.items.map(item => ({
-            id: item.item_id,
-            site: 'ソクミル',
-            title: item.title,
-            url: item.affiliateURL,
-            imageUrl: item.imageURL.list,
-            maker: item.iteminfo.maker ? item.iteminfo.maker[0].name : '情報なし',
-            score: 'N/A',
-            reason: `AIが生成したキーワード「${refinedKeywords}」に一致`
-        }));
-
-    } catch (e) { 
-        console.error("Sokmil search failed:", e);
-        throw new Error(`ソクミル検索中にエラーが発生しました: ${e.message}`);
     }
-}
+    
+    if (!data || !data.result || !data.result.items || data.result.items.length === 0) return [];
 
+    return data.result.items.map(item => ({
+        id: item.item_id,
+        site: 'ソクミル',
+        title: item.title,
+        url: item.affiliateURL,
+        imageUrl: item.imageURL.list,
+        maker: item.iteminfo.maker ? item.iteminfo.maker[0].name : '情報なし',
+        score: 'N/A',
+        reason: `(試行${attempt}回目) AIキーワード「${refinedKeywords}」に一致`
+    }));
+}
 // --- DMM(AI生成)用の関数 ---
 async function generateDmmResults(userQuery) {
     try {
