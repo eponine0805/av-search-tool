@@ -83,7 +83,7 @@ async function searchSokmil(keyword) {
             maker: item.iteminfo.maker ? item.iteminfo.maker[0].name : '情報なし',
         }));
 
-        const prompt = `ユーザーの記憶とソクミルの作品リストを比較し、各作品に一致度(score)と理由(reason)を追加したJSON配列で出力してください。
+        const prompt = `曖昧なユーザーの記憶を元にキーワードを作成しソクミルの作品リストを比較し、各作品に一致度(score)と理由(reason)を追加したJSON配列で出力してください。
         # ユーザーの記憶: "${searchQuery}"
         # 作品リスト: ${JSON.stringify(products)}
         # 出力形式 (JSON配列のみ): [{ "id": "作品ID", "score": 90, "reason": "理由" }]`;
