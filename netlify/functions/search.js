@@ -58,6 +58,9 @@ exports.handler = async (event) => {
 async function searchSokmil(keyword) {
     try {
         const searchQuery = keyword || "新人";
+        const keywordPrompt = `ユーザーの曖昧な記憶から、ソクミルのAPIで検索するためのキーワードを5つ以内で生成し、スペース区切りで出力してください。記憶: "${searchQuery}"`;
+        const keywordResult = await model.generateContent(keywordPrompt);
+        const refinedKeywords = keywordResult.response.text().trim();
         const params = new URLSearchParams({
             api_key: SOKMIL_API_KEY,
             affiliate_id: SOKMIL_AFFILIATE_ID,
