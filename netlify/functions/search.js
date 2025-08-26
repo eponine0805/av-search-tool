@@ -60,6 +60,7 @@ async function searchSokmil(keyword) {
         const searchQuery = keyword || "新人";
         const keywordPrompt = `あなたは非常に優秀なAV作品の検索エンジンです。
       以下のユーザーの曖昧な記憶を元に、ソクミルのAPIで検索するためのキーワードを5つ以内で生成し、検索してください。
+      作品が見つからなければキーワードを柔軟に作り変えて検索しなさい。
       ユーザーの記憶: "${searchQuery}"`;
         const keywordResult = await model.generateContent(keywordPrompt);
         const refinedKeywords = keywordResult.response.text().trim();
