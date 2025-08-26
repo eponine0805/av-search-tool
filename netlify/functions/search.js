@@ -60,7 +60,7 @@ async function searchSokmil(keyword) {
         const searchQuery = keyword || "新人";
         const params = new URLSearchParams({
             api_key: SOKMIL_API_KEY,
-            affiliate_id: 46544,
+            affiliate_id: SOKMIL_AFFILIATE_ID,
             output: 'json',
             hits: 15,
             keyword: searchQuery,
