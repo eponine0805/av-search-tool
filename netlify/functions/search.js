@@ -56,7 +56,7 @@ async function searchSokmil(keyword) {
         const searchQuery = keyword || "新人";
         
         // AIへの指示を、最もシンプルで安全なものに絞る
-        const keywordPrompt = `以下の文章から検索に使う日本語の名詞または形容詞を1〜5つ抽出し、スペース区切りで出力してください。文章: "${searchQuery}"`;
+        const keywordPrompt = `以下の文章から検索に使う日本語の名詞または形容詞を1つ抽出し、スペース区切りで出力してください。文章: "${searchQuery}"`;
         const keywordResult = await model.generateContent(keywordPrompt);
         const refinedKeywords = keywordResult.response.text().trim();
         
