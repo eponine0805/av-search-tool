@@ -50,45 +50,70 @@ exports.handler = async (event) => {
   }
 };
 
-// --- ソクミル検索用の関数 (最終版・タイムアウト対策済み) ---
+// --- ソクミル検索用の関数 (共通項検索・頻度順ソート機能付き) ---
 async function searchSokmil(keyword) {
     try {
         const searchQuery = keyword || "新人";
         
-        // AIへの指示を、最もシンプルで安全なものに絞る
-        const keywordPrompt = `以下の文章から検索に使う日本語の名詞または形容詞を1つ抽出し、スペース区切りで出力してください。文章: "${searchQuery}"`;
+        // ステップ1: AIに複数のキーワードを生成させる
+        const keywordPrompt = `以下の文章から検索に使う日本語の名詞または形容詞を1〜5つまで抽出し、スペース区切りで出力してください。文章: "${searchQuery}"`;
         const keywordResult = await model.generateContent(keywordPrompt);
-        const refinedKeywords = keywordResult.response.text().trim();
-        
-        const params = new URLSearchParams({
-            api_key: SOKMIL_API_KEY,
-            affiliate_id: SOKMIL_AFFILIATE_ID,
-            output: 'json',
-            hits: 20,
-            keyword: refinedKeywords,
+        const refinedKeywords = keywordResult.response.text().trim().split(' '); // スペースで区切って配列にする
+
+        // ステップ2: 各キーワードで並行してAPI検索を実行
+        const searchPromises = refinedKeywords.map(async (kw) => {
+            try {
+                const params = new URLSearchParams({
+                    api_key: SOKMIL_API_KEY,
+                    affiliate_id: SOKMIL_AFFILIATE_ID,
+                    output: 'json',
+                    hits: 20,
+                    keyword: kw,
+                });
+                const response = await fetch(`https://sokmil-ad.com/api/v1/Item?${params.toString()}`);
+                if (!response.ok) return []; // 失敗した場合は空を返す
+                const data = await response.json();
+                return data.result?.items || [];
+            } catch {
+                return []; // エラー時も空を返す
+            }
         });
         
-        const response = await fetch(`https://sokmil-ad.com/api/v1/Item?${params.toString()}`);
-        if (!response.ok) {
-            // APIからのエラーをそのまま表示
-            throw new Error(`Sokmil API request failed: ${response.status} ${response.statusText}`);
-        }
-        const data = await response.json();
-        
-        if (!data.result || !data.result.items || data.result.items.length === 0) {
-            return [];
-        }
+        const allResults = await Promise.all(searchPromises);
+        const flattenedResults = allResults.flat(); // 全ての結果を一つの配列にまとめる
 
-        return data.result.items.map(item => ({
-            id: item.item_id,
-            site: 'ソクミル',
-            title: item.title,
-            url: item.affiliateURL,
-            imageUrl: item.imageURL.list,
-            maker: item.iteminfo.maker ? item.iteminfo.maker[0].name : '情報なし',
-            score: 'N/A',
-            reason: `AIが生成したキーワード「${refinedKeywords}」に一致`
-        }));
+        if (flattenedResults.length === 0) return [];
+
+        // ステップ3: 共通して見つかった作品を数え、多い順に並び替える
+        const frequencyCounter = new Map();
+        const productData = new Map();
+
+        flattenedResults.forEach(item => {
+            const currentCount = frequencyCounter.get(item.item_id) || 0;
+            frequencyCounter.set(item.item_id, currentCount + 1);
+            // 各作品の最新情報を保存しておく
+            if (!productData.has(item.item_id)) {
+                productData.set(item.item_id, item);
+            }
+        });
+
+        // Mapを配列に変換し、出現回数でソート
+        const sortedByFrequency = [...frequencyCounter.entries()].sort((a, b) => b[1] - a[1]);
+        
+        // ステップ4: 最終的な結果を共通データ形式に変換
+        return sortedByFrequency.map(([itemId, count]) => {
+            const item = productData.get(itemId);
+            return {
+                id: item.item_id,
+                site: 'ソクミル',
+                title: item.title,
+                url: item.affiliateURL,
+                imageUrl: item.imageURL.list,
+                maker: item.iteminfo.maker ? item.iteminfo.maker[0].name : '情報なし',
+                score: `${count}/${refinedKeywords.length}`, // 例: 3/5個のキーワードに一致
+                reason: `AIが生成したキーワード「${refinedKeywords.join(', ')}」のうち、${count}個に一致しました。`
+            };
+        });
 
     } catch (e) { 
         console.error("Sokmil search failed:", e);
