@@ -56,7 +56,7 @@ async function searchSokmil(keyword) {
         const searchQuery = keyword || "新人";
         
         // ステップ1: AIに複数のキーワードを生成させる
-        const keywordPrompt = `以下の文章から検索に使う日本語の名詞または形容詞を1〜5つまで抽出し、スペース区切りで出力してください。文章: "${searchQuery}"`;
+        const keywordPrompt = `以下の文章から検索に使う学術的な意味をもつ日本語の名詞または形容詞を最大5つまで抽出し、スペース区切りで出力してください。文章: "${searchQuery}"`;
         const keywordResult = await model.generateContent(keywordPrompt);
         const refinedKeywords = keywordResult.response.text().trim().split(' '); // スペースで区切って配列にする
 
