@@ -54,18 +54,15 @@ exports.handler = async (event) => {
   }
 };
 
-// --- ソクミル検索用の関数 (変数名を修正) ---
+// --- ソクミル検索用の関数 (AIによる再評価を削除) ---
 async function searchSokmil(keyword) {
     try {
-        // ★★★ 空欄の場合のキーワードを設定 ★★★
         const searchQuery = keyword || "新人";
-
         const params = new URLSearchParams({
             api_key: SOKMIL_API_KEY,
             affiliate_id: SOKMIL_AFFILIATE_ID,
             output: 'json',
-            hits: 15,
-            // ★★★ ここを正しい変数名に修正 ★★★
+            hits: 20,
             keyword: searchQuery,
         });
         const response = await fetch(`https://sokmil-ad.com/api/v1/Item?${params.toString()}`);
@@ -74,35 +71,17 @@ async function searchSokmil(keyword) {
         
         if (!data.result || !data.result.items || data.result.items.length === 0) return [];
 
-        const products = data.result.items.map(item => ({
+        // データを共通の形式に変換して、そのまま返す
+        return data.result.items.map(item => ({
             id: item.item_id,
             site: 'ソクミル',
             title: item.title,
             url: item.affiliateURL,
             imageUrl: item.imageURL.list,
             maker: item.iteminfo.maker ? item.iteminfo.maker[0].name : '情報なし',
+            score: 'N/A', // スコアはなし
+            reason: 'キーワードに一致した作品'
         }));
-
-        const prompt = `曖昧なユーザーの記憶を元にキーワードを作成しソクミルの作品リストを比較し、各作品に一致度(score)と理由(reason)を追加したJSON配列で出力してください。
-        # ユーザーの記憶: "${searchQuery}"
-        # 作品リスト: ${JSON.stringify(products)}
-        # 出力形式 (JSON配列のみ): [{ "id": "作品ID", "score": 90, "reason": "理由" }]`;
-        
-        const rankingResult = await model.generateContent(prompt);
-        const responseText = rankingResult.response.text();
-        if (!responseText) return products;
-        
-        const rankedItems = JSON.parse(responseText.trim().replace(/```json/g, '').replace(/```/g, ''));
-        
-        return rankedItems.map(rankedItem => {
-            const originalItem = products.find(p => p.id === rankedItem.id);
-            if (!originalItem) return null;
-            return {
-                ...originalItem,
-                score: rankedItem.score,
-                reason: rankedItem.reason
-            };
-        }).filter(item => item !== null);
 
     } catch (e) { 
         console.error("Sokmil search failed:", e);
