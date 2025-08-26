@@ -68,7 +68,7 @@ async function searchSokmil(keyword) {
             // ★★★ ここを正しい変数名に修正 ★★★
             keyword: searchQuery,
         });
-        const response = await fetch(`https://sokmil-ad.com/api/v1/item?${params.toString()}`);
+        const response = await fetch(`https://sokmil-ad.com/api/v1/Item?${params.toString()}`);
         if (!response.ok) throw new Error(`Sokmil API request failed: ${response.statusText}`);
         const data = await response.json();
         
