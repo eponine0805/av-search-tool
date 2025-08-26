@@ -57,7 +57,7 @@ exports.handler = async (event) => {
 // --- ソクミル検索用の関数 ---
 async function searchSokmil(keyword) {
     try {
-        const searchQuery = keyword || "新人";
+      
         const params = new URLSearchParams({
             api_key: SOKMIL_API_KEY,
             affiliate_id: SOKMIL_AFFILIATE_ID,
