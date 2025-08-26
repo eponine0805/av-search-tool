@@ -58,7 +58,7 @@ async function searchSokmil(keyword) {
         let data = null;
         
         // --- 試行1回目: まず普通に検索 ---
-        const keywordPrompt1 = `あなたは非常に優秀なAV作品の検索エンジンです。以下のユーザーの曖昧な記憶から、作品検索に使うための最も重要なキーワードを5つ以内で抽出し、スペース区切りで出力してください。各キーワードは日本語で5文字以内とします。ユーザーの曖昧な記憶: "${searchQuery}"`;
+        const keywordPrompt1 = `あなたは非常に優秀なAV作品の検索エンジンです。以下のユーザーの曖昧な記憶から、作品検索に使う日本語の名詞または形容詞を最大3つまで生成し、スペース区切りで出力してください。ユーザーの曖昧な記憶: "${searchQuery}"`;
         const keywordResult1 = await model.generateContent(keywordPrompt1);
         refinedKeywords = keywordResult1.response.text().trim();
         
