@@ -54,15 +54,18 @@ exports.handler = async (event) => {
   }
 };
 
-// --- ソクミル検索用の関数 ---
+// --- ソクミル検索用の関数 (変数名を修正) ---
 async function searchSokmil(keyword) {
     try {
-      
+        // ★★★ 空欄の場合のキーワードを設定 ★★★
+        const searchQuery = keyword || "新人";
+
         const params = new URLSearchParams({
             api_key: SOKMIL_API_KEY,
             affiliate_id: SOKMIL_AFFILIATE_ID,
             output: 'json',
             hits: 15,
+            // ★★★ ここを正しい変数名に修正 ★★★
             keyword: searchQuery,
         });
         const response = await fetch(`https://sokmil-ad.com/api/v1/item?${params.toString()}`);
@@ -71,7 +74,6 @@ async function searchSokmil(keyword) {
         
         if (!data.result || !data.result.items || data.result.items.length === 0) return [];
 
-        // データを共通の形式に変換
         const products = data.result.items.map(item => ({
             id: item.item_id,
             site: 'ソクミル',
@@ -81,7 +83,6 @@ async function searchSokmil(keyword) {
             maker: item.iteminfo.maker ? item.iteminfo.maker[0].name : '情報なし',
         }));
 
-        // AIに評価を依頼
         const prompt = `ユーザーの記憶とソクミルの作品リストを比較し、各作品に一致度(score)と理由(reason)を追加したJSON配列で出力してください。
         # ユーザーの記憶: "${searchQuery}"
         # 作品リスト: ${JSON.stringify(products)}
@@ -89,7 +90,7 @@ async function searchSokmil(keyword) {
         
         const rankingResult = await model.generateContent(prompt);
         const responseText = rankingResult.response.text();
-        if (!responseText) return products; // AIがブロックされた場合は、評価なしのリストを返す
+        if (!responseText) return products;
         
         const rankedItems = JSON.parse(responseText.trim().replace(/```json/g, '').replace(/```/g, ''));
         
@@ -108,7 +109,6 @@ async function searchSokmil(keyword) {
         throw new Error(`ソクミル検索中にエラーが発生しました: ${e.message}`);
     }
 }
-
 // --- DMM(AI生成)用の関数 ---
 async function generateDmmResults(userQuery) {
     try {
