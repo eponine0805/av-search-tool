@@ -11,24 +11,51 @@ const SOKMIL_AFFILIATE_ID = process.env.SOKMIL_AFFILIATE_ID;
  * @returns {Promise<string>} Geminiからのテキスト応答
  */
 async function callGeminiApi(prompt) {
-  // curlコマンドで指定されたエンドポイント
   const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
-  // curlの`-d`（データ本体）に相当するリクエストボディを構築
   const requestBody = {
     contents: [
       {
         parts: [{ text: prompt }],
       },
     ],
-    // 元のコードにあったセーフティ設定もリクエストに含める
     safetySettings: [
       { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
       { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
       { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
       { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
     ],
+    // ▼▼▼ この部分を追加 ▼▼▼
+    generationConfig: {
+      responseMimeType: "application/json",
+    },
   };
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-goog-api-key': GEMINI_API_KEY,
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("Gemini API Error:", errorData);
+      throw new Error(`Gemini API request failed with status ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+  } catch (error) {
+    console.error("Error calling Gemini API:", error);
+    throw error;
+  }
+}
+
 
   try {
     const response = await fetch(url, {
