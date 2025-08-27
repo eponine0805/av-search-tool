@@ -12,7 +12,7 @@ const safetySettings = [
   { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
   { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
 ];
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash", safetySettings });
+const model = genAI.getGenerativeModel({ model: "/gemini-2.0-flash", safetySettings });
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
