@@ -7,11 +7,9 @@ const SOKMIL_AFFILIATE_ID = process.env.SOKMIL_AFFILIATE_ID;
 
 /**
  * Gemini APIを「JSONモード」で呼び出すためのヘルパー関数
- * @param {string} prompt Geminiに送信するプロンプト文字列
- * @returns {Promise<string>} GeminiからのJSONテキスト応答
  */
 async function callGeminiApi(prompt) {
-  const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+  const url = 'https://generativelace.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
   const requestBody = {
     contents: [
@@ -47,7 +45,7 @@ async function callGeminiApi(prompt) {
     }
 
     const data = await response.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || "[]"; // 応答がない場合は空のJSON配列を返す
   } catch (error) {
     console.error("Error calling Gemini API:", error);
     throw error;
@@ -73,11 +71,16 @@ exports.handler = async (event) => {
     } else {
       return { statusCode: 400, body: JSON.stringify({ message: '無効な検索タイプです。' }) };
     }
-
+    
+    // ▼▼▼ 修正点 ▼▼▼
+    // 検索結果が0件だった場合でも、必ずキーワードを含んだメッセージを返すようにする
     if (!responseData.results || responseData.results.length === 0) {
       return { 
         statusCode: 200, 
-        body: JSON.stringify({ message: "作品が見つかりませんでした。", keywords: responseData.keywords || [] }) 
+        body: JSON.stringify({ 
+            message: "作品が見つかりませんでした。", 
+            keywords: responseData.keywords || [] // responseDataからキーワードを取得
+        }) 
       };
     }
 
@@ -99,16 +102,22 @@ exports.handler = async (event) => {
  * Sokmil APIを検索し、関連性の高い順に結果を返す
  */
 async function searchSokmil(keyword) {
+  let refinedKeywords = []; // キーワードを関数の早い段階で初期化
   try {
     const searchQuery = keyword || "新人";
     const keywordPrompt = `あなたは非常に優秀なAV作品の検索エンジンです。以下の文章から検索に使う日本語の名詞または形容詞を1~5つまで抽出し、JSON配列の形式（例: ["キーワード1", "キーワード2"]）で出力してください。解説やMarkdownは一切含めないでください。文章: "${searchQuery}"`;
 
     const resultText = await callGeminiApi(keywordPrompt);
-    const refinedKeywords = JSON.parse(resultText);
+    refinedKeywords = JSON.parse(resultText);
 
+    // AIがキーワードを抽出しなかった場合
     if (!refinedKeywords || refinedKeywords.length === 0) {
-      return { results: [], keywords: [] };
+      console.log("AI did not extract any keywords.");
+      // 結果は空でも、抽出を試みたキーワード（この場合は空）を返す
+      return { results: [], keywords: refinedKeywords };
     }
+    
+    console.log("Extracted keywords by AI:", refinedKeywords);
 
     const searchPromises = refinedKeywords.map(async (kw) => {
       try {
@@ -118,7 +127,10 @@ async function searchSokmil(keyword) {
             keyword: kw,
         });
         const response = await fetch(`https://sokmil-ad.com/api/v1/Item?${params.toString()}`);
-        if (!response.ok) return [];
+        if (!response.ok) {
+            console.error(`Sokmil API returned status: ${response.status} for keyword: ${kw}`);
+            return [];
+        };
         const data = await response.json();
         return data.result?.items || [];
       } catch (error) {
@@ -129,7 +141,14 @@ async function searchSokmil(keyword) {
     
     const allResults = await Promise.all(searchPromises);
     const flattenedResults = allResults.flat();
-    if (flattenedResults.length === 0) return { results: [], keywords: refinedKeywords };
+
+    // 検索結果が0件だった場合
+    if (flattenedResults.length === 0) {
+      console.log("Sokmil search returned 0 results for all keywords.");
+      // ▼▼▼ 修正点 ▼▼▼
+      // 結果は空でも、検索に使用したキーワードを必ず返す
+      return { results: [], keywords: refinedKeywords };
+    }
 
     const frequencyCounter = new Map();
     const productData = new Map();
@@ -154,7 +173,9 @@ async function searchSokmil(keyword) {
     return { results: finalResults, keywords: refinedKeywords };
   } catch (e) {
     console.error("Sokmil search failed:", e);
-    throw new Error(`ソクミル検索中にエラーが発生しました: ${e.message}`);
+    // ▼▼▼ 修正点 ▼▼▼
+    // エラーが発生した場合でも、どのキーワードで試したかをエラー情報に含める
+    throw new Error(`ソクミル検索中にエラーが発生しました(Keywords: ${JSON.stringify(refinedKeywords)}): ${e.message}`);
   }
 }
 
@@ -164,7 +185,7 @@ async function searchSokmil(keyword) {
 async function generateDmmResults(userQuery) {
   try {
     const queryForAI = userQuery || "還暦を迎えた熟女とねっとり";
-    const prompt = `以下の記憶を元に、それに合致しそうな架-空のDMM作品のリストを3つ生成してください。記憶: "${queryForAI}" 出力ルール: JSON配列形式で、各作品に以下のキーを含めてください: id, site, title, url, imageUrl, maker, score, reason`;
+    const prompt = `以下の記憶を元に、それに合致しそうな架空のDMM作品のリストを3つ生成してください。記憶: "${queryForAI}" 出力ルール: JSON配列形式で、各作品に以下のキーを含めてください: id, site, title, url, imageUrl, maker, score, reason`;
 
     const responseText = await callGeminiApi(prompt);
     const finalResults = JSON.parse(responseText);
