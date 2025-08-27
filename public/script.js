@@ -44,30 +44,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
     
-    // ★★★ この関数をイベントリスナーの内側に戻す ★★★
     function displayResults(data) {
-        // dataがキーワードと結果を含むオブジェクトになった
-        const results = data.results;
-        const keywords = data.keywords;
+    // 最初にコンテナを空にする
+    resultsContainer.innerHTML = '';
 
-        if (data.message) {
-            resultsContainer.innerHTML = `<p>${data.message}</p>`;
-            return;
-        }
-        
-        if (keywords && keywords.length > 0) {
-            const keywordsElement = document.createElement('p');
-            keywordsElement.innerHTML = `<strong>AIが生成したキーワード:</strong> ${keywords.join(', ')}`;
-            resultsContainer.appendChild(keywordsElement);
-        }
+    const results = data.results;
+    const keywords = data.keywords;
+    const message = data.message;
 
-        if (!results || results.length === 0) {
-            const noResultsElement = document.createElement('p');
-            noResultsElement.textContent = '一致する作品が見つかりませんでした。';
-            resultsContainer.appendChild(noResultsElement);
-            return;
-        }
+    // 1. キーワードが存在すれば、まず表示する
+    if (keywords && keywords.length > 0) {
+        const keywordsElement = document.createElement('p');
+        keywordsElement.className = 'keywords-info';
+        keywordsElement.innerHTML = `<strong>AIが抽出したキーワード:</strong> ${keywords.join(', ')}`;
+        resultsContainer.appendChild(keywordsElement);
+    }
 
+    // 2. 検索結果（作品リスト）が存在すれば、表示する
+    if (results && results.length > 0) {
         results.forEach(item => {
             const title = item.title || 'タイトルなし';
             const affiliateURL = item.url || '#';
@@ -91,5 +85,13 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
             resultsContainer.appendChild(itemElement);
         });
+    } else {
+        // 3. 検索結果が0件の場合、メッセージを表示する
+        const messageElement = document.createElement('p');
+        // サーバーからのメッセージがあればそれを使い、なければ固定のメッセージを表示
+        messageElement.textContent = message || '一致する作品が見つかりませんでした。';
+        resultsContainer.appendChild(messageElement);
     }
-}); // ★★★ イベントリスナーの閉じ括弧をファイルの最後に移動 ★★★
+}
+
+        
