@@ -108,7 +108,7 @@ exports.handler = async (event) => {
 async function searchSokmil(keyword) {
   try {
     const searchQuery = keyword || "新人";
-    const keywordPrompt = `あなたは非常に優秀なAV作品の検索エンジンです。以下の文章から検索に使う日本語の名詞または形容詞を1~5つまで抽出し、スペース区切りで出力してください。文章: "${searchQuery}"`;
+    const keywordPrompt = `以下の文章から検索に使う日本語の名詞または形容詞を1~5つまで抽出し、スペース区切りで出力してください。文章: "${searchQuery}"`;
 
     // 修正点: ライブラリの代わりに新しく作成したcallGeminiApi関数を使用
     const resultText = await callGeminiApi(keywordPrompt);
@@ -173,7 +173,7 @@ async function searchSokmil(keyword) {
 async function generateDmmResults(userQuery) {
   try {
     const queryForAI = userQuery || "還暦を迎えた熟女とねっとり";
-    const prompt = `あなたは非常に優秀なAV作品の検索エンジンです。以下の文章から検索に使う日本語の名詞または形容詞を1~5つまで抽出し、スペース区切りで出力してください。そしてそれに合致しそうな架空のDMM作品のリストを3つ生成してください。記憶: "${queryForAI}" 出力ルール: JSON配列形式で、各作品に以下のキーを含めてください: id, site, title, url, imageUrl, maker, score, reason`;
+    const prompt = `以下の文章から検索に使う日本語の名詞または形容詞を1~5つまで抽出し、スペース区切りで出力してください。そしてそれに合致しそうな架空のDMM作品のリストを3つ生成してください。記憶: "${queryForAI}" 出力ルール: JSON配列形式で、各作品に以下のキーを含めてください: id, site, title, url, imageUrl, maker, score, reason`;
 
     // 修正点: ライブラリの代わりに新しく作成したcallGeminiApi関数を使用
     const responseText = await callGeminiApi(prompt);
