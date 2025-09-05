@@ -29,7 +29,8 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (!response.ok) {
-                throw new Error(`サーバーエラー: ${response.status} ${response.statusText}`);
+                const errorData = await response.json();
+                throw new Error(errorData.error || `サーバーエラー: ${response.status}`);
             }
 
             const data = await response.json();
@@ -63,23 +64,32 @@ document.addEventListener('DOMContentLoaded', () => {
                 const title = item.title || 'タイトルなし';
                 const affiliateURL = item.url || '#';
                 const imageURL = item.imageUrl || 'https://via.placeholder.com/200x300.png?text=No+Image';
-                const maker = item.maker || '情報なし';
                 const siteName = item.site || '';
+                const maker = item.maker || '情報なし';
+                // ▼▼▼ ここから追加 ▼▼▼
+                const actors = item.actors || '情報なし';
+                const genres = item.genres || '情報なし';
+                // ▲▲▲ ここまで追加 ▲▲▲
                 const score = item.score || '評価なし';
                 const reason = item.reason || '評価理由なし';
                 
                 const itemElement = document.createElement('div');
                 itemElement.className = 'item';
+
+                // ▼▼▼ 表示項目に「出演者」「ジャンル」を追加 ▼▼▼
                 itemElement.innerHTML = `
                     <img src="${imageURL}" alt="${title}">
                     <div class="item-info">
                         <h3><a href="${affiliateURL}" target="_blank" rel="noopener noreferrer">${title}</a></h3>
                         <p><strong>サイト:</strong> ${siteName}</p>
                         <p><strong>メーカー:</strong> ${maker}</p>
+                        <p><strong>出演者:</strong> ${actors}</p>
+                        <p><strong>ジャンル:</strong> ${genres}</p>
                         <p class="score">AIによる一致度: ${score}</p>
                         <p><strong>AIの評価理由:</strong> ${reason}</p>
                     </div>
                 `;
+                // ▲▲▲ 表示項目に「出演者」「ジャンル」を追加 ▲▲▲
                 resultsContainer.appendChild(itemElement);
             });
         } else {
