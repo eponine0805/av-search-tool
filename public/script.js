@@ -55,18 +55,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const results = data.results;
         const keywords = data.keywords;
         const message = data.message;
-        
-        if (keywords && Object.values(keywords).some(v => v && (Array.isArray(v) ? v.length > 0 : v))) {
-             const keywordsContainer = document.createElement('div');
-            keywordsContainer.className = 'keywords-info';
-            let html = '<strong>AIが特定した検索キーワード:</strong><dl>';
-            if(keywords.actor) html += `<dt>女優</dt><dd>${keywords.actor}</dd>`;
-            if(keywords.series) html += `<dt>シリーズ</dt><dd>${keywords.series}</dd>`;
-            if(keywords.genres && keywords.genres.length > 0) html += `<dt>ジャンル</dt><dd>${keywords.genres.join(', ')}</dd>`;
-            if(keywords.titles && keywords.titles.length > 0) html += `<dt>タイトル</dt><dd>${keywords.titles.join(', ')}</dd>`;
-            html += '</dl>';
-            keywordsContainer.innerHTML = html;
-            resultsContainer.appendChild(keywordsContainer);
+
+        // どのキーワードで検索されたかのメッセージを表示
+        if (message) {
+            const messageElement = document.createElement('p');
+            messageElement.className = 'search-info';
+            messageElement.innerHTML = `<strong>${message}</strong>`;
+            resultsContainer.appendChild(messageElement);
         }
 
         if (results && results.length > 0) {
@@ -82,7 +77,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const itemElement = document.createElement('div');
                 itemElement.className = 'item';
 
-                // ▼▼▼ スコアと理由の表示を削除 ▼▼▼
                 itemElement.innerHTML = `
                     <img src="${imageURL}" alt="${title}">
                     <div class="item-info">
@@ -93,14 +87,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         <p><strong>ジャンル:</strong> ${genres}</p>
                     </div>
                 `;
-                // ▲▲▲ 修正ここまで ▲▲▲
-
                 resultsContainer.appendChild(itemElement);
             });
         } else {
-             const noResultsElement = document.createElement('p');
-             noResultsElement.textContent = message || '一致する作品が見つかりませんでした。';
-             resultsContainer.appendChild(noResultsElement);
+            if (!message) {
+                 const noResultsElement = document.createElement('p');
+                 noResultsElement.textContent = '一致する作品が見つかりませんでした。';
+                 resultsContainer.appendChild(noResultsElement);
+            }
         }
     }
 });
