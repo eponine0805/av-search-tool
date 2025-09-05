@@ -56,7 +56,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const keywords = data.keywords;
         const message = data.message;
         
-        // AIが特定したキーワードの表示
         if (keywords && Object.values(keywords).some(v => v && (Array.isArray(v) ? v.length > 0 : v))) {
              const keywordsContainer = document.createElement('div');
             keywordsContainer.className = 'keywords-info';
@@ -79,22 +78,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 const maker = item.maker || '情報なし';
                 const actors = item.actors || '情報なし';
                 const genres = item.genres || '情報なし';
-                const sourceCategory = item.sourceCategory || '不明';
                 
                 const itemElement = document.createElement('div');
                 itemElement.className = 'item';
 
+                // ▼▼▼ スコアと理由の表示を削除 ▼▼▼
                 itemElement.innerHTML = `
                     <img src="${imageURL}" alt="${title}">
                     <div class="item-info">
                         <h3><a href="${affiliateURL}" target="_blank" rel="noopener noreferrer">${title}</a></h3>
-                        <p style="color: #d9534f; font-weight: bold;">ヒットカテゴリ: ${sourceCategory}</p>
                         <p><strong>サイト:</strong> ${siteName}</p>
                         <p><strong>メーカー:</strong> ${maker}</p>
                         <p><strong>出演者:</strong> ${actors}</p>
                         <p><strong>ジャンル:</strong> ${genres}</p>
                     </div>
                 `;
+                // ▲▲▲ 修正ここまで ▲▲▲
+
                 resultsContainer.appendChild(itemElement);
             });
         } else {
