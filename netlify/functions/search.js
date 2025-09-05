@@ -107,7 +107,6 @@ async function searchSokmil(userQuery) {
   try {
     const searchQuery = userQuery || "新人";
 
-    // --- AIによるキーワードの生成と分類 ---
     const generationPrompt = `あなたは検索の専門家です。以下の文章から検索に有効そうなキーワードを10個まで生成し、JSON配列で出力してください。文章: "${searchQuery}"`;
     const generatedKeywordsText = await callGeminiApi(generationPrompt);
     const generatedKeywords = JSON.parse(generatedKeywordsText || "[]");
@@ -137,21 +136,18 @@ async function searchSokmil(userQuery) {
         hits: 20
     };
 
-    // ▼▼▼ 仕様書に基づいた正しい検索フローに全面的に刷新 ▼▼▼
-    
-    // 1. タイトル配列 → 作品APIを`keyword`で直接検索
     keywordsObject.title.forEach(kw => {
         const params = new URLSearchParams({ ...baseParams, keyword: kw });
         searchPromises.push(callSokmilApi('Item', params).then(data => data?.result?.items || []));
     });
 
-    // 2. IDを取得してから作品を検索する共通関数
+    // ▼▼▼ 共通関数内のデータ参照方法を修正 ▼▼▼
     const searchItemsByArticleId = async (articleType, keywords) => {
         const isActorSearch = articleType === 'actor';
-        const endpoint = articleType.charAt(0).toUpperCase() + articleType.slice(1); // 'actor' -> 'Actor'
+        const endpoint = articleType.charAt(0).toUpperCase() + articleType.slice(1);
 
         const idSearchPromises = keywords.map(kw => {
-            const idSearchParams = new URLSearchParams({ ...baseParams, keyword: kw, hits: 3 }); // 関連IDを3つまで取得
+            const idSearchParams = new URLSearchParams({ ...baseParams, keyword: kw, hits: 3 });
             return callSokmilApi(endpoint, idSearchParams);
         });
         
@@ -159,8 +155,17 @@ async function searchSokmil(userQuery) {
         const itemSearchPromises = [];
 
         idResults.forEach(idData => {
-            const foundEntities = idData?.result?.[articleType] || [];
+            // --- ここからが修正箇所 ---
+            let entities = idData?.result?.[articleType];
+            // API応答が単体オブジェクトの場合、配列に変換して処理を統一
+            if (entities && !Array.isArray(entities)) {
+                entities = [entities];
+            }
+            const foundEntities = entities || [];
+            // --- 修正箇所ここまで ---
+
             foundEntities.forEach(entity => {
+                if (!entity || !entity.id) return; // 不正なエンティティをスキップ
                 const itemSearchParams = new URLSearchParams({ ...baseParams, article: articleType, article_id: entity.id });
                 const itemPromise = callSokmilApi('Item', itemSearchParams).then(data => {
                     const items = data?.result?.items || [];
@@ -174,12 +179,9 @@ async function searchSokmil(userQuery) {
         return Promise.all(itemSearchPromises).then(results => results.flat());
     };
     
-    // 3. 各カテゴリのID検索を実行
     searchPromises.push(searchItemsByArticleId('actor', keywordsObject.actor));
     searchPromises.push(searchItemsByArticleId('genre', keywordsObject.genre));
     searchPromises.push(searchItemsByArticleId('series', keywordsObject.series));
-    
-    // ▲▲▲ 検索フローの刷新ここまで ▲▲▲
 
     const allResults = await Promise.all(searchPromises);
     const flattenedResults = allResults.flat();
