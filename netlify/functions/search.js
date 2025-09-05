@@ -102,8 +102,13 @@ async function searchSokmil(keyword) {
   try {
     const searchQuery = keyword || "新人";
     const keywordPrompt = `あなたは非常に優秀なAV作品の検索エンジンです。以下の文章から検索に使う日本語の名詞または形容詞を1~3つまで抽出し、さらに追加で文章から類推される単語を2つ生成し、合計3~5つの単語をJSON配列の形式（例: ["キーワード1", "キーワード2"]）で出力してください。解説やMarkdownは一切含めないでください。単語が、Googleのセーフティ機能に抵触しそうな場合はキーワードに含めないでください。文章: "${searchQuery}"`;
-
     const resultText = await callGeminiApi(keywordPrompt);
+
+    if (!resultText) {
+        console.log("Gemini API returned an empty response. Returning no results.");
+        return { results: [], keywords: [] };
+    }
+
     const refinedKeywords = JSON.parse(resultText);
 
     if (!refinedKeywords || refinedKeywords.length === 0) {
@@ -117,22 +122,27 @@ async function searchSokmil(keyword) {
           affiliate_id: SOKMIL_AFFILIATE_ID,
           keyword: kw,
           output: 'json',
-          hits: 30, // 30件に増やしておきます。お好みで調整してください。
+          hits: 30,
         });
-        const response = await fetch(`https://sokmil-ad.com/api/v1/Item?${params.toString()}`);
-        // ▼▼▼ タイムアウト処理を追加 ▼▼▼
+        const url = `https://sokmil-ad.com/api/v1/Item?${params.toString()}`;
+
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 9000); // 9秒でタイムアウト
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8秒でタイムアウト
 
         const response = await fetch(url, { signal: controller.signal });
         
-        clearTimeout(timeoutId); // 成功したらタイマーを解除
+        clearTimeout(timeoutId);
+        
         if (!response.ok) return [];
         
         const data = await response.json();
         return data.result?.items || [];
       } catch (error) {
-        console.error(`Sokmil API search failed for keyword "${kw}":`, error);
+        if (error.name === 'AbortError') {
+          console.error(`Sokmil API request timed out for keyword: "${kw}"`);
+        } else {
+          console.error(`Sokmil API search failed for keyword "${kw}":`, error);
+        }
         return [];
       }
     });
@@ -147,10 +157,9 @@ async function searchSokmil(keyword) {
     const frequencyCounter = new Map();
     const productData = new Map();
     flattenedResults.forEach(item => {
-        // ▼▼▼ 修正点 ▼▼▼
-        const currentCount = frequencyCounter.get(item.id) || 0; // item.item_id -> item.id
-        frequencyCounter.set(item.id, currentCount + 1);          // item.item_id -> item.id
-        if (!productData.has(item.id)) productData.set(item.id, item); // item.item_id -> item.id
+        const currentCount = frequencyCounter.get(item.id) || 0;
+        frequencyCounter.set(item.id, currentCount + 1);
+        if (!productData.has(item.id)) productData.set(item.id, item);
     });
 
     const sortedByFrequency = [...frequencyCounter.entries()].sort((a, b) => b[1] - a[1]);
@@ -158,8 +167,7 @@ async function searchSokmil(keyword) {
     const finalResults = sortedByFrequency.map(([itemId, count]) => {
         const item = productData.get(itemId);
         return {
-            // ▼▼▼ 修正点 ▼▼▼
-            id: item.id, // item.item_id -> item.id
+            id: item.id,
             site: 'ソクミル',
             title: item.title,
             url: item.affiliateURL,
