@@ -92,6 +92,5 @@ document.addEventListener('DOMContentLoaded', () => {
         messageElement.textContent = message || '一致する作品が見つかりませんでした。';
         resultsContainer.appendChild(messageElement);
     }
-}
-
+});
         
