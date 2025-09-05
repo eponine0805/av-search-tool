@@ -107,7 +107,7 @@ async function searchSokmil(userQuery) {
   try {
     const searchQuery = userQuery || "新人";
 
-    const generationPrompt = `あなたは検索の専門家です。以下の文章から検索に有効そうなキーワードを10個まで生成し、JSON配列で出力してください。文章: "${searchQuery}"`;
+    const generationPrompt = `あなたは検索の専門家です。以下の文章から検索に有効そうなキーワードを10個まで抽出、あるいは生成し、JSON配列で出力してください。文章: "${searchQuery}"`;
     const generatedKeywordsText = await callGeminiApi(generationPrompt);
     const generatedKeywords = JSON.parse(generatedKeywordsText || "[]");
 
@@ -198,7 +198,7 @@ async function searchSokmil(userQuery) {
         
         let reasonText = `実行された${totalSearchesPerformed}回の検索のうち、${count}回ヒットしました。`;
         if (isSpecifiedActorWork) {
-            reasonText = `[最優先] 指定された女優の作品の可能性が高いです。` + reasonText;
+            reasonText = `指定された女優の作品の可能性が高いです。` + reasonText;
         }
         const scorePercentage = totalSearchesPerformed > 0 ? Math.round((count / totalSearchesPerformed) * 100) : 0;
         
