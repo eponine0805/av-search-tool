@@ -3,7 +3,7 @@
 // --- 環境変数 ---
 const GEMINI_API_KEY = process.env.GOOGLE_GEMINI_API_KEY;
 const SOKMIL_API_KEY = process.env.SOKMIL_API_KEY;
-const SOKMIL_AFFiliate_ID = process.env.SOKMIL_AFFILIATE_ID;
+const SOKMIL_AFFILIATE_ID = process.env.SOKMIL_AFFILIATE_ID; // ◀◀◀ タイプミスを修正
 
 // Sokmil APIのベースURL
 const SOKMIL_BASE_URL = 'https://sokmil-ad.com/api/v1';
@@ -146,10 +146,8 @@ async function searchSokmil(userQuery) {
         return { results: [], keywords: [] };
     }
 
-    // ▼▼▼ ここから変更 ▼▼▼
     const isActorSpecified = keywordsObject.actor && keywordsObject.actor.length > 0;
     const specifiedActorIds = new Set();
-    // ▲▲▲ ここまで変更 ▲▲▲
 
     const searchPromises = [];
     const baseParams = {
@@ -175,11 +173,9 @@ async function searchSokmil(userQuery) {
             const promise = callSokmilApi(type, idSearchParams)
                 .then(idData => {
                     const foundItems = idData?.result?.[resultKey] || [];
-                    // ▼▼▼ ここから追加 ▼▼▼
                     if (type === 'Actor') {
                         foundItems.forEach(item => specifiedActorIds.add(item.id));
                     }
-                    // ▲▲▲ ここまで追加 ▲▲▲
                     if (foundItems.length === 0) return [];
                     
                     const itemSearchPromises = foundItems.slice(0, 3).map(item => {
@@ -208,7 +204,6 @@ async function searchSokmil(userQuery) {
         if (!productData.has(item.id)) productData.set(item.id, item);
     });
 
-    // ▼▼▼ ここからソートロジックを修正 ▼▼▼
     const sortedByFrequency = [...frequencyCounter.entries()].sort((a, b) => {
         if (!isActorSpecified || specifiedActorIds.size === 0) {
             return b[1] - a[1];
@@ -228,7 +223,6 @@ async function searchSokmil(userQuery) {
 
         return b[1] - a[1];
     });
-    // ▲▲▲ ここまでソートロジックを修正 ▲▲▲
     
     const finalResults = sortedByFrequency.slice(0, 50).map(([itemId, count]) => {
         const item = productData.get(itemId);
@@ -236,7 +230,6 @@ async function searchSokmil(userQuery) {
         const actors = item.iteminfo?.actor?.map(a => a.name).join(', ') || '情報なし';
         const genres = item.iteminfo?.genre?.map(g => g.name).join(', ') || '情報なし';
 
-        // ▼▼▼ ここから「理由」を動的に生成 ▼▼▼
         const itemActorIds = new Set(item.iteminfo?.actor?.map(act => act.id) || []);
         const isSpecifiedActorWork = isActorSpecified && [...specifiedActorIds].some(id => itemActorIds.has(id));
         
@@ -244,7 +237,6 @@ async function searchSokmil(userQuery) {
         if (isSpecifiedActorWork) {
             reasonText = `[最優先] 指定された女優の作品です。` + reasonText;
         }
-        // ▲▲▲ ここまで「理由」を動的に生成 ▲▲▲
 
         return {
             id: item.id,
@@ -256,7 +248,7 @@ async function searchSokmil(userQuery) {
             actors: actors,
             genres: genres,
             score: `${count}/${allKeywords.length}`,
-            reason: reasonText, // ◀◀◀ 修正
+            reason: reasonText,
         };
     });
 
