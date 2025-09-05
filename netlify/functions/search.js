@@ -130,6 +130,7 @@ async function searchSokmil(userQuery) {
         return { results: [], keywords: [] };
     }
 
+    // ▼▼▼ 各配列を専用の検索にのみ使用するようロジックを修正 ▼▼▼
     const searchPromises = [];
     const baseParams = {
         api_key: SOKMIL_API_KEY,
@@ -138,26 +139,27 @@ async function searchSokmil(userQuery) {
         hits: 20
     };
 
-    // ▼▼▼ API呼び出し方法をシンプルで確実な形に修正 ▼▼▼
-    const createSearchPromise = (kw, isActorSearch = false) => {
-        const params = new URLSearchParams({ ...baseParams, keyword: kw });
-        return callSokmilApi('Item', params).then(data => {
+    // 各検索パラメータとキーワードのペアを作成
+    const searchTasks = [
+        ...keywordsObject.title.map(kw => ({ params: { keyword: kw }, isActorSearch: false })),
+        ...keywordsObject.genre.map(kw => ({ params: { genre: kw }, isActorSearch: false })),
+        ...keywordsObject.series.map(kw => ({ params: { series: kw }, isActorSearch: false })),
+        ...keywordsObject.actor.map(kw => ({ params: { artist: kw }, isActorSearch: true }))
+    ];
+
+    searchTasks.forEach(task => {
+        const finalParams = new URLSearchParams({ ...baseParams, ...task.params });
+        const promise = callSokmilApi('Item', finalParams).then(data => {
             const items = data?.result?.items || [];
             // 女優検索でヒットした作品に目印をつける
-            if (isActorSearch) {
+            if (task.isActorSearch) {
                 items.forEach(item => item._isActorMatch = true);
             }
             return items;
         });
-    };
-
-    keywordsObject.title.forEach(kw => searchPromises.push(createSearchPromise(kw)));
-    keywordsObject.genre.forEach(kw => searchPromises.push(createSearchPromise(kw)));
-    keywordsObject.series.forEach(kw => searchPromises.push(createSearchPromise(kw)));
-    // 女優名もkeywordとして検索するが、どの作品が女優検索でヒットしたか分かるように目印をつける
-    keywordsObject.actor.forEach(kw => searchPromises.push(createSearchPromise(kw, true)));
-    
-    // ▲▲▲ API呼び出し方法の修正ここまで ▲▲▲
+        searchPromises.push(promise);
+    });
+    // ▲▲▲ 検索ロジックの修正ここまで ▲▲▲
 
     const allResults = await Promise.all(searchPromises);
     const flattenedResults = allResults.flat();
@@ -173,7 +175,6 @@ async function searchSokmil(userQuery) {
         const currentCount = frequencyCounter.get(item.id) || 0;
         frequencyCounter.set(item.id, currentCount + 1);
         
-        // 既存の作品情報に、女優検索ヒットの目印があれば追記する
         if (!productData.has(item.id)) {
             productData.set(item.id, item);
         } else if (item._isActorMatch) {
@@ -187,7 +188,6 @@ async function searchSokmil(userQuery) {
         const itemA = productData.get(a[0]);
         const itemB = productData.get(b[0]);
 
-        // 女優検索が指定されている場合、isActorMatchフラグを持つものを最優先
         if (isActorSpecified) {
             const isItemASpecified = itemA._isActorMatch || false;
             const isItemBSpecified = itemB._isActorMatch || false;
@@ -195,7 +195,6 @@ async function searchSokmil(userQuery) {
             if (!isItemASpecified && isItemBSpecified) return 1;
         }
         
-        // 優先度が同じ場合は、ヒット回数でソート
         return b[1] - a[1];
     });
     
@@ -205,7 +204,7 @@ async function searchSokmil(userQuery) {
         const genres = item.iteminfo?.genre?.map(g => g.name).join(', ') || '情報なし';
         const isSpecifiedActorWork = item._isActorMatch || false;
         
-        let reasonText = `実行された${totalSearchesPerformed}回の検索のうち、${count}回ヒットしました。`;
+        let reasonText = `実行された${totalSearchesPerformed}回の専門検索のうち、${count}回ヒットしました。`;
         if (isSpecifiedActorWork) {
             reasonText = `[最優先] 指定された女優の作品の可能性が高いです。` + reasonText;
         }
