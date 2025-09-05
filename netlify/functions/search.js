@@ -107,35 +107,28 @@ async function searchSokmil(userQuery) {
   try {
     const searchQuery = userQuery || "新人";
 
-    // ▼▼▼ AIロジックを刷新 (生成 → 分類) ▼▼▼
-
-    // --- ステップ1: キーワード生成AI (類推) ---
-    const generationPrompt = `あなたは非常に優秀なAV作品の検索の専門家です。以下の文章を元に、検索に有効そうなキーワード（名詞、形容詞、人名、ジャンル名など）を10個まで類推・生成し、JSON配列の形式で出力してください。
+    // --- AIによるキーワードの生成と分類 ---
+    const generationPrompt = `あなたは検索の専門家です。以下の文章から検索に有効そうなキーワードを10個まで生成し、JSON配列で出力してください。
 文章: "${searchQuery}"`;
     const generatedKeywordsText = await callGeminiApi(generationPrompt);
     const generatedKeywords = JSON.parse(generatedKeywordsText || "[]");
 
-    // --- ステップ2: キーワード分類AI (分類) ---
     const allWordsToClassify = [...new Set([searchQuery, ...generatedKeywords])];
-    const classificationPrompt = `あなたは文章解析とキーワード分類の専門家です。以下のキーワードリストを分析し、各単語を「タイトル」「シリーズ」「ジャンル」「出演者」の4つのカテゴリに最も適切に分類してください。
+    const classificationPrompt = `あなたはキーワード分類の専門家です。以下のリストを分析し、各単語を「タイトル」「シリーズ」「ジャンル」「出演者」の4つのカテゴリに最も適切に分類してください。
 - 人名は必ず「出演者」に分類してください。
 - ジャンル名は必ず「ジャンル」に分類してください。
 - 分類が難しい一般的な単語は「タイトル」に含めてください。
 - 出力はJSON形式で、キーは"title", "series", "genre", "actor"とし、値は文字列配列にしてください。
-- 解説やMarkdownは不要です。
 キーワードリスト: ${JSON.stringify(allWordsToClassify)}`;
     
     const classifiedKeywordsText = await callGeminiApi(classificationPrompt);
     const keywordsObject = JSON.parse(classifiedKeywordsText || "{}");
 
-    // 空の配列を保証
     keywordsObject.title = keywordsObject.title || [];
     keywordsObject.series = keywordsObject.series || [];
     keywordsObject.genre = keywordsObject.genre || [];
     keywordsObject.actor = keywordsObject.actor || [];
 
-    // ▲▲▲ AIロジックの刷新ここまで ▲▲▲
-    
     const totalSearchesPerformed = Object.values(keywordsObject).reduce((sum, arr) => sum + arr.length, 0);
     const displayedKeywords = [...new Set(Object.values(keywordsObject).flat())];
 
@@ -143,47 +136,58 @@ async function searchSokmil(userQuery) {
         return { results: [], keywords: [] };
     }
 
-    const isActorSpecified = keywordsObject.actor && keywordsObject.actor.length > 0;
-    const specifiedActorIds = new Set();
     const searchPromises = [];
     const baseParams = {
         api_key: SOKMIL_API_KEY,
         affiliate_id: SOKMIL_AFFILIATE_ID,
-        output: 'json'
+        output: 'json',
+        hits: 20
     };
 
+    // ▼▼▼ ここからAPI呼び出し方法を全面的に修正 ▼▼▼
+
+    // 1. タイトル検索 (作品APIのkeywordパラメータを使用)
     keywordsObject.title.forEach(kw => {
-        const params = new URLSearchParams({ ...baseParams, keyword: kw, hits: 20 });
+        const params = new URLSearchParams({ ...baseParams, keyword: kw });
         searchPromises.push(callSokmilApi('Item', params).then(data => data?.result?.items || []));
     });
 
-    const categorySearches = [
-        { type: 'Genre', keywords: keywordsObject.genre, idKey: 'genre_id', resultKey: 'genre' },
-        { type: 'Series', keywords: keywordsObject.series, idKey: 'series_id', resultKey: 'series' },
-        { type: 'Actor', keywords: keywordsObject.actor, idKey: 'actor_id', resultKey: 'actor' },
-    ];
-    categorySearches.forEach(({ type, keywords, idKey, resultKey }) => {
-        keywords.forEach(kw => {
-            const idSearchParams = new URLSearchParams({ ...baseParams, keyword: kw });
-            const promise = callSokmilApi(type, idSearchParams)
-                .then(idData => {
-                    const foundItems = idData?.result?.[resultKey] || [];
-                    if (type === 'Actor') {
-                        foundItems.forEach(item => specifiedActorIds.add(item.id));
-                    }
-                    if (foundItems.length === 0) return [];
-                    const itemSearchPromises = foundItems.slice(0, 3).map(item => {
-                        const itemSearchParams = new URLSearchParams({ ...baseParams, [idKey]: item.id, hits: 10 });
-                        return callSokmilApi('Item', itemSearchParams).then(itemData => itemData?.result?.items || []);
-                    });
-                    return Promise.all(itemSearchPromises).then(results => results.flat());
-                });
-            searchPromises.push(promise);
-        });
+    // 2. ジャンル検索 (作品APIのgenreパラメータを使用)
+    keywordsObject.genre.forEach(kw => {
+        const params = new URLSearchParams({ ...baseParams, genre: kw });
+        searchPromises.push(callSokmilApi('Item', params).then(data => data?.result?.items || []));
     });
 
-    const allResults = await Promise.all(searchPromises);
+    // 3. シリーズ検索 (作品APIのseriesパラメータを使用)
+    keywordsObject.series.forEach(kw => {
+        const params = new URLSearchParams({ ...baseParams, series: kw });
+        searchPromises.push(callSokmilApi('Item', params).then(data => data?.result?.items || []));
+    });
+
+    // 4. 出演者検索 (出演者APIでIDを引いてから、作品APIのactor_idパラメータを使用)
+    const specifiedActorIds = new Set();
+    const actorSearchPromises = keywordsObject.actor.map(kw => {
+        const actorSearchParams = new URLSearchParams({ ...baseParams, keyword: kw });
+        return callSokmilApi('Actor', actorSearchParams)
+            .then(actorData => {
+                const foundActors = actorData?.result?.actor || [];
+                if (foundActors.length === 0) return [];
+
+                // 見つかった女優IDで作品を検索
+                const itemSearchPromises = foundActors.slice(0, 2).map(actor => { // 関連性が高そうな上位2名のIDのみ使用
+                    specifiedActorIds.add(actor.id);
+                    const itemSearchParams = new URLSearchParams({ ...baseParams, actor_id: actor.id });
+                    return callSokmilApi('Item', itemSearchParams).then(itemData => itemData?.result?.items || []);
+                });
+                return Promise.all(itemSearchPromises).then(results => results.flat());
+            });
+    });
+    
+    // ▲▲▲ API呼び出し方法の修正ここまで ▲▲▲
+
+    const allResults = await Promise.all([...searchPromises, ...actorSearchPromises]);
     const flattenedResults = allResults.flat();
+
     if (flattenedResults.length === 0) {
       return { results: [], keywords: displayedKeywords };
     }
@@ -197,8 +201,9 @@ async function searchSokmil(userQuery) {
         if (!productData.has(item.id)) productData.set(item.id, item);
     });
 
+    const isActorSpecified = specifiedActorIds.size > 0;
     const sortedByFrequency = [...frequencyCounter.entries()].sort((a, b) => {
-        if (!isActorSpecified || specifiedActorIds.size === 0) return b[1] - a[1];
+        if (!isActorSpecified) return b[1] - a[1];
         const itemA = productData.get(a[0]);
         const itemB = productData.get(b[0]);
         const itemAActorIds = new Set(itemA.iteminfo?.actor?.map(act => act.id) || []);
@@ -216,14 +221,11 @@ async function searchSokmil(userQuery) {
         const genres = item.iteminfo?.genre?.map(g => g.name).join(', ') || '情報なし';
         const itemActorIds = new Set(item.iteminfo?.actor?.map(act => act.id) || []);
         const isSpecifiedActorWork = isActorSpecified && [...specifiedActorIds].some(id => itemActorIds.has(id));
-        
         let reasonText = `実行された${totalSearchesPerformed}回の検索のうち、${count}回ヒットしました。`;
         if (isSpecifiedActorWork) {
             reasonText = `[最優先] 指定された女優の作品です。` + reasonText;
         }
-
         const scorePercentage = totalSearchesPerformed > 0 ? Math.round((count / totalSearchesPerformed) * 100) : 0;
-        
         return {
             id: item.id, site: 'ソクミル', title: item.title, url: item.affiliateURL,
             imageUrl: item.imageURL?.list, maker: item.iteminfo?.maker?.[0]?.name || '情報なし',
