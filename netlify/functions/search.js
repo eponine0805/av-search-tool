@@ -1,115 +1,224 @@
-document.addEventListener('DOMContentLoaded', () => {
-    const searchInput = document.getElementById('searchInput');
-    const dmmSearchButton = document.getElementById('dmmSearchButton');
-    const sokmilSearchButton = document.getElementById('sokmilSearchButton');
-    const loader = document.getElementById('loader');
-    const resultsContainer = document.getElementById('results');
+// netlify/functions/search.js
 
-    dmmSearchButton.addEventListener('click', () => {
-        performSearch('dmm');
+// --- 環境変数 ---
+const GEMINI_API_KEY = process.env.GOOGLE_GEMINI_API_KEY;
+const SOKMIL_API_KEY = process.env.SOKMIL_API_KEY;
+const SOKMIL_AFFILIATE_ID = process.env.SOKMIL_AFFILIATE_ID;
+
+// Sokmil APIのベースURL
+const SOKMIL_BASE_URL = 'https://sokmil-ad.com/api/v1';
+
+/**
+ * Gemini APIを「JSONモード」で呼び出すためのヘルパー関数
+ */
+async function callGeminiApi(prompt) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
+  const requestBody = {
+    contents: [{ parts: [{ text: prompt }] }],
+    safetySettings: [
+      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+    ],
+    generationConfig: { responseMimeType: "application/json" },
+  };
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
     });
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Gemini API Error Response:", errorText);
+      throw new Error(`Gemini API request failed with status ${response.status}`);
+    }
+    const data = await response.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+  } catch (error) {
+    console.error("Error calling Gemini API:", error);
+    return "{}";
+  }
+}
 
-    sokmilSearchButton.addEventListener('click', () => {
-        performSearch('sokmil');
-    });
+/**
+ * Sokmil APIを呼び出す共通ヘルパー関数
+ */
+async function callSokmilApi(endpoint, params) {
+    const url = `${SOKMIL_BASE_URL}/${endpoint}?${params.toString()}`;
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        const response = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (!response.ok) return null;
+        return await response.json();
+    } catch (error) {
+        if (error.name === 'AbortError') console.error(`Sokmil API request to ${endpoint} timed out.`);
+        else console.error(`Sokmil API request to ${endpoint} failed:`, error);
+        return null;
+    }
+}
 
-    const performSearch = async (searchType) => {
-        const query = searchInput.value.trim();
-        if (!query) {
-            resultsContainer.innerHTML = '<p>検索したい内容を入力してください。</p>';
-            return;
-        }
+/**
+ * Netlify Functionのメインハンドラ
+ */
+exports.handler = async (event) => {
+  if (event.httpMethod !== 'POST') {
+    return { statusCode: 405, body: JSON.stringify({ message: 'Method Not Allowed' }) };
+  }
+  try {
+    const { userQuery, type } = JSON.parse(event.body);
+    let responseData = {};
+    if (type === 'dmm') {
+      responseData = await generateDmmResults(userQuery);
+    } else if (type === 'sokmil') {
+      responseData = await searchSokmil(userQuery);
+    } else {
+      return { statusCode: 400, body: JSON.stringify({ message: '無効な検索タイプです。' }) };
+    }
+    const bodyResponse = {
+        keywords: responseData.keywords || {},
+        results: responseData.results || [],
+        message: responseData.message || ((!responseData.results || responseData.results.length === 0) ? "作品が見つかりませんでした。" : "")
+    };
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(bodyResponse),
+    };
+  } catch (error) {
+    console.error("Handler Error:", error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: `サーバー内部でエラーが発生しました: ${error.message}` }),
+    };
+  }
+};
 
-        loader.style.display = 'block';
-        resultsContainer.innerHTML = '';
-        dmmSearchButton.disabled = true;
-        sokmilSearchButton.disabled = true;
+const normalizeToArray = (entity) => {
+    if (!entity) return [];
+    if (Array.isArray(entity)) return entity;
+    return [entity];
+};
 
-        try {
-            const response = await fetch('/.netlify/functions/search', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userQuery: query, type: searchType }),
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || `サーバーエラー: ${response.status}`);
-            }
-
-            const data = await response.json();
-            displayResults(data);
-
-        } catch (error) {
-            resultsContainer.innerHTML = `<p>エラーが発生しました: ${error.message}</p>`;
-        } finally {
-            loader.style.display = 'none';
-            dmmSearchButton.disabled = false;
-            sokmilSearchButton.disabled = false;
-        }
+/**
+ * Sokmil APIを検索し、関連性の高い順に結果を返す
+ */
+async function searchSokmil(userQuery) {
+  try {
+    const searchQuery = userQuery || "新人";
+    const baseParams = {
+        api_key: SOKMIL_API_KEY,
+        affiliate_id: SOKMIL_AFFILIATE_ID,
+        output: 'json'
+    };
+    const keywordsForDisplay = { actor: null, series: null, genres: [], titles: [] };
+    
+    // --- 事前調査フェーズ ---
+    const getSingleEntity = async (entityType, query) => {
+        if (!query) return null;
+        const res = await callSokmilApi(entityType, new URLSearchParams({ ...baseParams, keyword: query, hits: 1 }));
+        return normalizeToArray(res?.result?.[entityType.toLowerCase()])[0] || null;
+    };
+    const getMultipleGenres = async (query) => {
+        const prompt = `以下の文章から関連性の高いAVのジャンルを最大3つ抽出し、JSON配列で出力してください。文章: "${query}"`;
+        const text = await callGeminiApi(prompt);
+        return JSON.parse(text || "[]");
+    };
+     const getTitleKeywords = async (query) => {
+        const prompt = `以下の文章から女優名、ジャンル名、シリーズ名を除いた、作品の内容を表す一般的なキーワード（名詞、形容詞）を最大3つ抽出し、JSON配列で出力してください。文章: "${query}"`;
+        const text = await callGeminiApi(prompt);
+        return JSON.parse(text || "[]");
     };
     
-    function displayResults(data) {
-        resultsContainer.innerHTML = '';
+    const nameExtractionPrompt = `以下の文章から、特定の「女優名」と「シリーズ名」をそれぞれ1つずつ抜き出してください。もし文章中にそれらが含まれていない場合は、空の文字列""を返してください。出力はJSON形式で {"actor_name": "...", "series_name": "..."} の形式でお願いします。文章: "${searchQuery}"`;
+    const nameText = await callGeminiApi(nameExtractionPrompt);
+    const names = JSON.parse(nameText || "{}");
 
-        const results = data.results;
-        const keywords = data.keywords;
-        const message = data.message;
-        
-        if (keywords && Object.values(keywords).some(v => v && (Array.isArray(v) ? v.length > 0 : v))) {
-             const keywordsContainer = document.createElement('div');
-            keywordsContainer.className = 'keywords-info';
-            let html = '<strong>AIが特定した検索キーワード:</strong><dl>';
-            if(keywords.actor) html += `<dt>女優</dt><dd>${keywords.actor}</dd>`;
-            if(keywords.series) html += `<dt>シリーズ</dt><dd>${keywords.series}</dd>`;
-            if(keywords.genres && keywords.genres.length > 0) html += `<dt>ジャンル</dt><dd>${keywords.genres.join(', ')}</dd>`;
-            if(keywords.titles && keywords.titles.length > 0) html += `<dt>タイトル</dt><dd>${keywords.titles.join(', ')}</dd>`;
-            html += '</dl>';
-            keywordsContainer.innerHTML = html;
-            resultsContainer.appendChild(keywordsContainer);
-        }
+    const [actor, series, genres, titles] = await Promise.all([
+        getSingleEntity('Actor', names.actor_name),
+        getSingleEntity('Series', names.series_name),
+        getMultipleGenres(searchQuery),
+        getTitleKeywords(searchQuery)
+    ]);
 
-        if (results && results.length > 0) {
-            results.forEach(item => {
-                const title = item.title || 'タイトルなし';
-                const affiliateURL = item.url || '#';
-                const imageURL = item.imageUrl || 'https://via.placeholder.com/200x300.png?text=No+Image';
-                const siteName = item.site || '';
-                const maker = item.maker || '情報なし';
-                const actors = item.actors || '情報なし';
-                const genres = item.genres || '情報なし';
-                const score = item.score;
-                const reason = item.reason;
-                
-                const itemElement = document.createElement('div');
-                itemElement.className = 'item';
+    if (actor) keywordsForDisplay.actor = actor.name;
+    if (series) keywordsForDisplay.series = series.name;
+    if (genres.length > 0) keywordsForDisplay.genres = genres;
+    if (titles.length > 0) keywordsForDisplay.titles = titles;
 
-                // スコアと理由の表示を復活
-                let scoreHtml = '';
-                if (score && reason) {
-                    scoreHtml = `
-                        <p class="score"><strong>関連スコア: ${score}</strong></p>
-                        <p><strong>スコア内訳:</strong> ${reason}</p>
-                    `;
-                }
+    // --- 作品検索フェーズ (優先度順) ---
+    let finalResults = [];
+    let searchMessage = "";
 
-                itemElement.innerHTML = `
-                    <img src="${imageURL}" alt="${title}">
-                    <div class="item-info">
-                        <h3><a href="${affiliateURL}" target="_blank" rel="noopener noreferrer">${title}</a></h3>
-                        ${scoreHtml}
-                        <p><strong>サイト:</strong> ${siteName}</p>
-                        <p><strong>メーカー:</strong> ${maker}</p>
-                        <p><strong>出演者:</strong> ${actors}</p>
-                        <p><strong>ジャンル:</strong> ${genres}</p>
-                    </div>
-                `;
-                resultsContainer.appendChild(itemElement);
-            });
-        } else {
-             const noResultsElement = document.createElement('p');
-             noResultsElement.textContent = message || '一致する作品が見つかりませんでした。';
-             resultsContainer.appendChild(noResultsElement);
-        }
+    if (actor) {
+        searchMessage = `女優「${actor.name}」の作品を検索しました。`;
+        const params = new URLSearchParams({ ...baseParams, article: 'actor', article_id: actor.id, hits: 50 });
+        const data = await callSokmilApi('Item', params);
+        finalResults = normalizeToArray(data?.result?.items);
+    } 
+    else if (series) {
+        searchMessage = `シリーズ「${series.name}」の作品を検索しました。`;
+        const params = new URLSearchParams({ ...baseParams, article: 'series', article_id: series.id, hits: 50 });
+        const data = await callSokmilApi('Item', params);
+        finalResults = normalizeToArray(data?.result?.items);
     }
-});
+    else if (genres.length > 0) {
+        searchMessage = `ジャンル「${genres.join(', ')}」で作品を検索しました。`;
+        const genreSearchPromises = genres.map(async (g) => {
+            const genreRes = await callSokmilApi('Genre', new URLSearchParams({ ...baseParams, keyword: g, hits: 1 }));
+            const foundGenre = normalizeToArray(genreRes?.result?.genre)[0];
+            if (!foundGenre) return [];
+            const params = new URLSearchParams({ ...baseParams, article: 'genre', article_id: foundGenre.id, hits: 20 });
+            const data = await callSokmilApi('Item', params);
+            return normalizeToArray(data?.result?.items);
+        });
+        const results = await Promise.all(genreSearchPromises);
+        finalResults = results.flat();
+    }
+    else if (titles.length > 0) {
+        searchMessage = `キーワード「${titles.join(', ')}」で作品を検索しました。`;
+        const titleSearchPromises = titles.map(t => {
+            const params = new URLSearchParams({ ...baseParams, keyword: t, hits: 20 });
+            return callSokmilApi('Item', params);
+        });
+        const results = await Promise.all(titleSearchPromises);
+        finalResults = results.map(r => normalizeToArray(r?.result?.items)).flat();
+    }
+    
+    const uniqueResults = [...new Map(finalResults.map(item => [item.id, item])).values()];
+    
+    const formattedResults = uniqueResults.map(item => ({
+        id: item.id, site: 'ソクミル', title: item.title, url: item.affiliateURL,
+        imageUrl: item.imageURL?.list, maker: item.iteminfo?.maker?.[0]?.name || '情報なし',
+        actors: item.iteminfo?.actor?.map(a => a.name).join(', ') || '情報なし',
+        genres: item.iteminfo?.genre?.map(g => g.name).join(', ') || '情報なし',
+    }));
+
+    return { results: formattedResults, keywords: keywordsForDisplay, message: searchMessage };
+
+  } catch (e) {
+    console.error("Sokmil search failed:", e);
+    return { results: [], keywords: {}, error: `ソクミル検索中にエラーが発生しました: ${e.message}` };
+  }
+}
+
+
+/**
+ * AIにユーザーの記憶に基づいた架空のDMM作品リストを生成させる
+ */
+async function generateDmmResults(userQuery) {
+  try {
+    const queryForAI = userQuery || "還暦を迎えた熟女とねっとり";
+    const prompt = `記憶: "${queryForAI}" に合致しそうな架空のDMM作品リストを3つ生成してください。
+出力ルール: JSON配列形式で、各作品に以下のキーを含めてください: id, site, title, url, imageUrl, maker, actors, genres`;
+    const responseText = await callGeminiApi(prompt);
+    const finalResults = JSON.parse(responseText || "[]");
+    return { results: finalResults, keywords: { generated: [queryForAI] }, message: "AIが架空の作品を生成しました。" };
+  } catch (e) {
+    console.error("DMM AI generation failed:", e);
+    throw new Error(`DMMのAI生成中にエラーが発生しました: ${e.message}`);
+  }
+}
