@@ -117,6 +117,7 @@ async function searchSokmil(keyword) {
           affiliate_id: SOKMIL_AFFILIATE_ID,
           keyword: kw,
           output: 'json', // ← この一行を追加！
+          hits: 10,
         });
         const response = await fetch(`https://sokmil-ad.com/api/v1/Item?${params.toString()}`);
         if (!response.ok) return [];
