@@ -82,7 +82,7 @@ exports.handler = async (event) => {
       return { statusCode: 400, body: JSON.stringify({ message: '無効な検索タイプです。' }) };
     }
     const bodyResponse = {
-        keywords: responseData.keywords || {}, // オブジェクトを渡す
+        keywords: responseData.keywords || {},
         results: responseData.results || [],
         message: (!responseData.results || responseData.results.length === 0) ? "作品が見つかりませんでした。" : ""
     };
@@ -107,7 +107,8 @@ async function searchSokmil(userQuery) {
   try {
     const searchQuery = userQuery || "新人";
 
-    const generationPrompt = `あなたは検索の専門家です。以下の文章から検索に有効そうなキーワードを10個まで抽出、あるいは生成し、JSON配列で出力してください。文章: "${searchQuery}"`;
+    // --- AIによるキーワードの生成と分類 ---
+    const generationPrompt = `あなたは検索の専門家です。以下の文章から検索に有効そうなキーワードを10個まで生成し、JSON配列で出力してください。文章: "${searchQuery}"`;
     const generatedKeywordsText = await callGeminiApi(generationPrompt);
     const generatedKeywords = JSON.parse(generatedKeywordsText || "[]");
 
@@ -135,24 +136,50 @@ async function searchSokmil(userQuery) {
         output: 'json',
         hits: 20
     };
-    
-    // ▼▼▼ 検索方法を最も確実な「keyword」での検索に統一 ▼▼▼
-    const createSearchPromise = (kw, isActorSearch = false) => {
-        const params = new URLSearchParams({ ...baseParams, keyword: kw });
-        return callSokmilApi('Item', params).then(data => {
-            const items = data?.result?.items || [];
-            if (isActorSearch) {
-                items.forEach(item => item._isActorMatch = true);
-            }
-            return items;
-        });
-    };
 
-    keywordsObject.title.forEach(kw => searchPromises.push(createSearchPromise(kw, false)));
-    keywordsObject.genre.forEach(kw => searchPromises.push(createSearchPromise(kw, false)));
-    keywordsObject.series.forEach(kw => searchPromises.push(createSearchPromise(kw, false)));
-    keywordsObject.actor.forEach(kw => searchPromises.push(createSearchPromise(kw, true)));
-    // ▲▲▲ 検索方法の修正ここまで ▲▲▲
+    // ▼▼▼ 仕様書に基づいた正しい検索フローに全面的に刷新 ▼▼▼
+    
+    // 1. タイトル配列 → 作品APIを`keyword`で直接検索
+    keywordsObject.title.forEach(kw => {
+        const params = new URLSearchParams({ ...baseParams, keyword: kw });
+        searchPromises.push(callSokmilApi('Item', params).then(data => data?.result?.items || []));
+    });
+
+    // 2. IDを取得してから作品を検索する共通関数
+    const searchItemsByArticleId = async (articleType, keywords) => {
+        const isActorSearch = articleType === 'actor';
+        const endpoint = articleType.charAt(0).toUpperCase() + articleType.slice(1); // 'actor' -> 'Actor'
+
+        const idSearchPromises = keywords.map(kw => {
+            const idSearchParams = new URLSearchParams({ ...baseParams, keyword: kw, hits: 3 }); // 関連IDを3つまで取得
+            return callSokmilApi(endpoint, idSearchParams);
+        });
+        
+        const idResults = await Promise.all(idSearchPromises);
+        const itemSearchPromises = [];
+
+        idResults.forEach(idData => {
+            const foundEntities = idData?.result?.[articleType] || [];
+            foundEntities.forEach(entity => {
+                const itemSearchParams = new URLSearchParams({ ...baseParams, article: articleType, article_id: entity.id });
+                const itemPromise = callSokmilApi('Item', itemSearchParams).then(data => {
+                    const items = data?.result?.items || [];
+                    if (isActorSearch) items.forEach(item => item._isActorMatch = true);
+                    return items;
+                });
+                itemSearchPromises.push(itemPromise);
+            });
+        });
+
+        return Promise.all(itemSearchPromises).then(results => results.flat());
+    };
+    
+    // 3. 各カテゴリのID検索を実行
+    searchPromises.push(searchItemsByArticleId('actor', keywordsObject.actor));
+    searchPromises.push(searchItemsByArticleId('genre', keywordsObject.genre));
+    searchPromises.push(searchItemsByArticleId('series', keywordsObject.series));
+    
+    // ▲▲▲ 検索フローの刷新ここまで ▲▲▲
 
     const allResults = await Promise.all(searchPromises);
     const flattenedResults = allResults.flat();
@@ -196,9 +223,9 @@ async function searchSokmil(userQuery) {
         const genres = item.iteminfo?.genre?.map(g => g.name).join(', ') || '情報なし';
         const isSpecifiedActorWork = item._isActorMatch || false;
         
-        let reasonText = `実行された${totalSearchesPerformed}回の検索のうち、${count}回ヒットしました。`;
+        let reasonText = `実行された${totalSearchesPerformed}回の専門検索のうち、${count}回ヒットしました。`;
         if (isSpecifiedActorWork) {
-            reasonText = `指定された女優の作品の可能性が高いです。` + reasonText;
+            reasonText = `[最優先] 指定された女優の作品です。` + reasonText;
         }
         const scorePercentage = totalSearchesPerformed > 0 ? Math.round((count / totalSearchesPerformed) * 100) : 0;
         
@@ -230,7 +257,7 @@ async function generateDmmResults(userQuery) {
 - 存在しない項目は「情報なし」と記載してください。`;
     const responseText = await callGeminiApi(prompt);
     const finalResults = JSON.parse(responseText || "[]");
-    return { results: finalResults, keywords: { generated: [queryForAI] } }; // ダミーオブジェクトを返す
+    return { results: finalResults, keywords: { generated: [queryForAI] } };
   } catch (e) {
     console.error("DMM AI generation failed:", e);
     throw new Error(`DMMのAI生成中にエラーが発生しました: ${e.message}`);
