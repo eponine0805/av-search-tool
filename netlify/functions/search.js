@@ -113,9 +113,10 @@ async function searchSokmil(keyword) {
     const searchPromises = refinedKeywords.map(async (kw) => {
       try {
         const params = new URLSearchParams({
-            api_key: SOKMIL_API_KEY,
-            affiliate_id: SOKMIL_AFFILIATE_ID,
-            keyword: kw,
+          api_key: SOKMIL_API_KEY,
+          affiliate_id: SOKMIL_AFFILIATE_ID,
+          keyword: kw,
+          output: 'json', // ← この一行を追加！
         });
         const response = await fetch(`https://sokmil-ad.com/api/v1/Item?${params.toString()}`);
         if (!response.ok) return [];
