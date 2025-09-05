@@ -51,13 +51,37 @@ document.addEventListener('DOMContentLoaded', () => {
         const results = data.results;
         const keywords = data.keywords;
         const message = data.message;
+        
+        // ▼▼▼ キーワード表示部分をオブジェクト対応に修正 ▼▼▼
+        if (keywords && Object.keys(keywords).length > 0) {
+            const keywordsContainer = document.createElement('div');
+            keywordsContainer.className = 'keywords-info';
 
-        if (keywords && keywords.length > 0) {
-            const keywordsElement = document.createElement('p');
-            keywordsElement.className = 'keywords-info';
-            keywordsElement.innerHTML = `<strong>AIが抽出したキーワード:</strong> ${keywords.join(', ')}`;
-            resultsContainer.appendChild(keywordsElement);
+            let html = '<strong>AIが分類したキーワード:</strong><dl>';
+            
+            const categoryMap = {
+                title: 'タイトル',
+                genre: 'ジャンル',
+                series: 'シリーズ',
+                actor: '出演者'
+            };
+
+            for (const category in categoryMap) {
+                if (keywords[category] && keywords[category].length > 0) {
+                    html += `<dt>${categoryMap[category]}</dt><dd>${keywords[category].join(', ')}</dd>`;
+                }
+            }
+            html += '</dl>';
+
+            // DMM検索の場合のフォールバック
+            if (!keywords.title && !keywords.genre && !keywords.series && !keywords.actor && keywords.generated) {
+                 html = `<strong>AIが使用したキーワード:</strong><p>${keywords.generated.join(', ')}</p>`;
+            }
+
+            keywordsContainer.innerHTML = html;
+            resultsContainer.appendChild(keywordsContainer);
         }
+        // ▲▲▲ キーワード表示部分の修正ここまで ▲▲▲
 
         if (results && results.length > 0) {
             results.forEach(item => {
@@ -66,17 +90,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 const imageURL = item.imageUrl || 'https://via.placeholder.com/200x300.png?text=No+Image';
                 const siteName = item.site || '';
                 const maker = item.maker || '情報なし';
-                // ▼▼▼ ここから追加 ▼▼▼
                 const actors = item.actors || '情報なし';
                 const genres = item.genres || '情報なし';
-                // ▲▲▲ ここまで追加 ▲▲▲
                 const score = item.score || '評価なし';
                 const reason = item.reason || '評価理由なし';
                 
                 const itemElement = document.createElement('div');
                 itemElement.className = 'item';
 
-                // ▼▼▼ 表示項目に「出演者」「ジャンル」を追加 ▼▼▼
                 itemElement.innerHTML = `
                     <img src="${imageURL}" alt="${title}">
                     <div class="item-info">
@@ -89,7 +110,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         <p><strong>AIの評価理由:</strong> ${reason}</p>
                     </div>
                 `;
-                // ▲▲▲ 表示項目に「出演者」「ジャンル」を追加 ▲▲▲
                 resultsContainer.appendChild(itemElement);
             });
         } else {
