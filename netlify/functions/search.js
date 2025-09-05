@@ -116,14 +116,13 @@ async function searchSokmil(keyword) {
           api_key: SOKMIL_API_KEY,
           affiliate_id: SOKMIL_AFFILIATE_ID,
           keyword: kw,
-          output: 'json', // ← この一行を追加！
-          hits: 10,
+          output: 'json',
+          hits: 30, // 30件に増やしておきます。お好みで調整してください。
         });
-        
         const response = await fetch(`https://sokmil-ad.com/api/v1/Item?${params.toString()}`);
         if (!response.ok) return [];
+        
         const data = await response.json();
-        console.log('Sokmil APIから返ってきた生のデータ:', JSON.stringify(data, null, 2));
         return data.result?.items || [];
       } catch (error) {
         console.error(`Sokmil API search failed for keyword "${kw}":`, error);
@@ -133,20 +132,18 @@ async function searchSokmil(keyword) {
     
     const allResults = await Promise.all(searchPromises);
     const flattenedResults = allResults.flat();
-    // 検索結果が0件だった場合
+    
     if (flattenedResults.length === 0) {
-      console.log("Sokmil search returned 0 results for all keywords.");
-      // ▼▼▼ 修正点 ▼▼▼
-      // 結果は空でも、検索に使用したキーワードを必ず返す
       return { results: [], keywords: refinedKeywords };
     }
 
     const frequencyCounter = new Map();
     const productData = new Map();
     flattenedResults.forEach(item => {
-        const currentCount = frequencyCounter.get(item.item_id) || 0;
-        frequencyCounter.set(item.item_id, currentCount + 1);
-        if (!productData.has(item.item_id)) productData.set(item.item_id, item);
+        // ▼▼▼ 修正点 ▼▼▼
+        const currentCount = frequencyCounter.get(item.id) || 0; // item.item_id -> item.id
+        frequencyCounter.set(item.id, currentCount + 1);          // item.item_id -> item.id
+        if (!productData.has(item.id)) productData.set(item.id, item); // item.item_id -> item.id
     });
 
     const sortedByFrequency = [...frequencyCounter.entries()].sort((a, b) => b[1] - a[1]);
@@ -154,8 +151,13 @@ async function searchSokmil(keyword) {
     const finalResults = sortedByFrequency.map(([itemId, count]) => {
         const item = productData.get(itemId);
         return {
-            id: item.item_id, site: 'ソクミル', title: item.title, url: item.affiliateURL,
-            imageUrl: item.imageURL.list, maker: item.iteminfo.maker ? item.iteminfo.maker[0].name : '情報なし',
+            // ▼▼▼ 修正点 ▼▼▼
+            id: item.id, // item.item_id -> item.id
+            site: 'ソクミル',
+            title: item.title,
+            url: item.affiliateURL,
+            imageUrl: item.imageURL.list,
+            maker: item.iteminfo.maker ? item.iteminfo.maker[0].name : '情報なし',
             score: `${count}/${refinedKeywords.length}`,
             reason: `AIが生成したキーワードのうち、${count}個に一致しました。`
         };
@@ -167,7 +169,6 @@ async function searchSokmil(keyword) {
     throw new Error(`ソクミル検索中にエラーが発生しました: ${e.message}`);
   }
 }
-
 /**
  * AIにユーザーの記憶に基づいた架空のDMM作品リストを生成させる
  */
