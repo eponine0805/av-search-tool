@@ -3,15 +3,13 @@
 // --- 環境変数 ---
 const GEMINI_API_KEY = process.env.GOOGLE_GEMINI_API_KEY;
 const SOKMIL_API_KEY = process.env.SOKMIL_API_KEY;
-const SOKMIL_AFFILIATE_ID = process.env.SOKMIL_AFFILIATE_ID; // ◀◀◀ タイプミスを修正
+const SOKMIL_AFFILIATE_ID = process.env.SOKMIL_AFFILIATE_ID;
 
 // Sokmil APIのベースURL
 const SOKMIL_BASE_URL = 'https://sokmil-ad.com/api/v1';
 
 /**
  * Gemini APIを「JSONモード」で呼び出すためのヘルパー関数
- * @param {string} prompt Geminiに送信するプロムプト文字列
- * @returns {Promise<string>} GeminiからのJSONテキスト応答
  */
 async function callGeminiApi(prompt) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
@@ -52,15 +50,12 @@ async function callGeminiApi(prompt) {
 
 /**
  * Sokmil APIを呼び出す共通ヘルパー関数
- * @param {string} endpoint 'Item', 'Actor', 'Genre', 'Series'
- * @param {URLSearchParams} params クエリパラメータ
- * @returns {Promise<any>} APIからのレスポンスJSON
  */
 async function callSokmilApi(endpoint, params) {
     const url = `${SOKMIL_BASE_URL}/${endpoint}?${params.toString()}`;
     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8秒でタイムアウト
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
 
         const response = await fetch(url, { signal: controller.signal });
         clearTimeout(timeoutId);
@@ -79,7 +74,6 @@ async function callSokmilApi(endpoint, params) {
         return null;
     }
 }
-
 
 /**
  * Netlify Functionのメインハンドラ
@@ -121,7 +115,6 @@ exports.handler = async (event) => {
     };
   }
 };
-
 
 /**
  * Sokmil APIを検索し、関連性の高い順に結果を返す
@@ -208,19 +201,14 @@ async function searchSokmil(userQuery) {
         if (!isActorSpecified || specifiedActorIds.size === 0) {
             return b[1] - a[1];
         }
-
         const itemA = productData.get(a[0]);
         const itemB = productData.get(b[0]);
-
         const itemAActorIds = new Set(itemA.iteminfo?.actor?.map(act => act.id) || []);
         const itemBActorIds = new Set(itemB.iteminfo?.actor?.map(act => act.id) || []);
-
         const isItemASpecified = [...specifiedActorIds].some(id => itemAActorIds.has(id));
         const isItemBSpecified = [...specifiedActorIds].some(id => itemBActorIds.has(id));
-
         if (isItemASpecified && !isItemBSpecified) return -1;
         if (!isItemASpecified && isItemBSpecified) return 1;
-
         return b[1] - a[1];
     });
     
@@ -238,6 +226,10 @@ async function searchSokmil(userQuery) {
             reasonText = `[最優先] 指定された女優の作品です。` + reasonText;
         }
 
+        // ▼▼▼ スコア計算をパーセンテージに変更 ▼▼▼
+        const scorePercentage = allKeywords.length > 0 ? Math.round((count / allKeywords.length) * 100) : 0;
+        // ▲▲▲ スコア計算をパーセンテージに変更 ▲▲▲
+
         return {
             id: item.id,
             site: 'ソクミル',
@@ -247,7 +239,7 @@ async function searchSokmil(userQuery) {
             maker: item.iteminfo?.maker?.[0]?.name || '情報なし',
             actors: actors,
             genres: genres,
-            score: `${count}/${allKeywords.length}`,
+            score: `${scorePercentage}%`, // ◀◀◀ 変更
             reason: reasonText,
         };
     });
@@ -267,9 +259,15 @@ async function searchSokmil(userQuery) {
 async function generateDmmResults(userQuery) {
   try {
     const queryForAI = userQuery || "還暦を迎えた熟女とねっとり";
+    // ▼▼▼ プロンプトを修正 ▼▼▼
     const prompt = `以下の記憶を元に、それに合致しそうな架空のDMM作品のリストを3つ生成してください。
 記憶: "${queryForAI}"
-出力ルール: JSON配列形式で、各作品に以下のキーを必ず含めてください: id, site, title, url, imageUrl, maker, actors, genres, score, reason。actorsとgenresの値は、カンマ区切りの文字列にしてください。(例: "女優A, 女優B")。存在しない場合は「情報なし」と記載してください。`;
+出力ルール: 
+- JSON配列形式で、各作品に以下のキーを必ず含めてください: id, site, title, url, imageUrl, maker, actors, genres, score, reason。
+- actorsとgenresの値は、カンマ区切りの文字列にしてください。(例: "女優A, 女優B")。
+- scoreはAIによる一致度をパーセンテージの文字列（例: "85%"）で示してください。
+- 存在しない項目は「情報なし」と記載してください。`;
+    // ▲▲▲ プロンプトを修正 ▲▲▲
 
     const responseText = await callGeminiApi(prompt);
     const finalResults = JSON.parse(responseText);
