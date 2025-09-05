@@ -120,6 +120,13 @@ async function searchSokmil(keyword) {
           hits: 30, // 30件に増やしておきます。お好みで調整してください。
         });
         const response = await fetch(`https://sokmil-ad.com/api/v1/Item?${params.toString()}`);
+        // ▼▼▼ タイムアウト処理を追加 ▼▼▼
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 9000); // 9秒でタイムアウト
+
+        const response = await fetch(url, { signal: controller.signal });
+        
+        clearTimeout(timeoutId); // 成功したらタイマーを解除
         if (!response.ok) return [];
         
         const data = await response.json();
