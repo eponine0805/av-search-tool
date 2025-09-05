@@ -119,10 +119,11 @@ async function searchSokmil(keyword) {
           output: 'json', // ← この一行を追加！
           hits: 10,
         });
-        console.log('Sokmil APIから返ってきた生のデータ:', JSON.stringify(data, null, 2));
+        
         const response = await fetch(`https://sokmil-ad.com/api/v1/Item?${params.toString()}`);
         if (!response.ok) return [];
         const data = await response.json();
+        console.log('Sokmil APIから返ってきた生のデータ:', JSON.stringify(data, null, 2));
         return data.result?.items || [];
       } catch (error) {
         console.error(`Sokmil API search failed for keyword "${kw}":`, error);
