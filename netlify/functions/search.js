@@ -213,7 +213,7 @@ async function searchSokmil(keyword) {
         actors: itemActors,
         genres: itemGenres,
         score: `${count}/${totalKeywordsCount}`,
-        reason: `AIが抽出したキーワード(${totalKeywordsCount}個)のうち、${count}個の検索条件に一致しました。`
+        reason: `キーワード(${totalKeywordsCount}個)のうち、${count}個の検索条件に一致しました。`
       };
     });
 
