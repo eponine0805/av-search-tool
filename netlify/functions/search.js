@@ -136,7 +136,7 @@ async function searchSokmil(keyword) {
     const searchQuery = keyword || "還暦を迎えた60代とねっとりセックス";
 
     // 1. Gemini API を使用してキーワードを「キーワード」「女優」に分類
-    const keywordPrompt = `あなたは非常に優秀な検索アシスタントです。あなたは非常に優秀なAV作品の検索エンジンです。以下の文章から検索に使うタイトルに含まれていそうな日本語の名詞または形容詞あるいは女優名を1~5つまで抽出し、さらに追加で文章から類推されるAVのジャンルを3つ生成し、それらを「女優名」「キーワード」の2つのカテゴリに分類してください。
+    const keywordPrompt = `あなたは非常に優秀な検索アシスタントです。あなたは非常に優秀なAV作品の検索エンジンです。以下の文章から検索に使うタイトルに含まれていそうな日本語の名詞または形容詞あるいは女優名を1~5つまで抽出し、さらに追加で文章から類推されるAVのジャンルを5つ生成し、それらを「女優名」「キーワード」の2つのカテゴリに分類してください。
 文章: "${searchQuery}"
 
 出力ルール:
@@ -167,7 +167,7 @@ async function searchSokmil(keyword) {
         api_key: SOKMIL_API_KEY,
         affiliate_id: SOKMIL_AFFILIATE_ID,
         output: 'json',
-        hits: 20,
+        hits: 30,
     };
 
     // ▼▼▼ 修正点2: 変数名を keywords に合わせ、汎用的なキーワード検索を作成 ▼▼▼
