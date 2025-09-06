@@ -54,7 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (keywords && keywords.length > 0) {
             const keywordsElement = document.createElement('p');
             keywordsElement.className = 'keywords-info';
-            keywordsElement.innerHTML = `<strong>AIが抽出したキーワード:</strong> ${keywords.join(', ')}`;
+            keywordsElement.innerHTML = `<strong>抽出したキーワード:</strong> ${keywords.join(', ')}`;
             resultsContainer.appendChild(keywordsElement);
         }
 
@@ -84,8 +84,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         <p><strong>メーカー:</strong> ${maker}</p>
                         <p><strong>出演者:</strong> ${actors}</p>
                         <p><strong>ジャンル:</strong> ${genres}</p>
-                        <p class="score">AIによる一致度: ${score}</p>
-                        <p><strong>AIの評価理由:</strong> ${reason}</p>
+                        <p class="score">一致度: ${score}</p>
+                        <p><strong>評価理由:</strong> ${reason}</p>
                     </div>
                 `;
                 resultsContainer.appendChild(itemElement);
