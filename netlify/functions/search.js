@@ -208,7 +208,8 @@ async function searchSokmil(keyword) {
         site: 'ソクミル',
         title: item.title,
         url: item.affiliateURL,
-        imageUrl: item.imageURL?.list || '',
+        imageUrl: item.imageURL?.list || '', // 小さい画像のURL
+        largeImageUrl: item.imageURL?.large || item.imageURL?.list || '', // 大きい画像のURLを追加 (存在しない場合は小さい画像を使う)
         maker: item.iteminfo?.maker?.[0]?.name || '情報なし',
         actors: itemActors,
         genres: itemGenres,
