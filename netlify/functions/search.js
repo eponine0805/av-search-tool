@@ -167,7 +167,7 @@ async function searchSokmil(keyword) {
         api_key: SOKMIL_API_KEY,
         affiliate_id: SOKMIL_AFFILIATE_ID,
         output: 'json',
-        hits: 50, // 各キーワードでの取得件数を増やして網羅性を高める
+        hits: 20, // 各キーワードでの取得件数を増やして網羅性を高める
     };
 
     const titlePromises = titles.map(kw => fetchSokmilApi(new URLSearchParams({ ...baseParams, keyword: kw })));
