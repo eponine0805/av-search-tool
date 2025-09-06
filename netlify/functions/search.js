@@ -107,7 +107,7 @@ async function fetchSokmilApi(params) {
     const url = `https://sokmil-ad.com/api/v1/Item?${params.toString()}`;
     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8秒でタイムアウト
+        const timeoutId = setTimeout(() => controller.abort(), 9000); // 9秒でタイムアウト
         const response = await fetch(url, { signal: controller.signal });
         clearTimeout(timeoutId);
 
