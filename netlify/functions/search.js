@@ -95,60 +95,94 @@ exports.handler = async (event) => {
   }
 };
 
+
+// ▼▼▼ ここから変更 ▼▼▼
+
 /**
- * Sokmil APIを検索し、関連性の高い順に結果を返す
+ * Sokmil APIを呼び出して検索結果を取得するヘルパー関数
+ * @param {URLSearchParams} params APIリクエストのパラメータ
+ * @returns {Promise<Array>} 検索結果のアイテム配列
+ */
+async function fetchSokmilApi(params) {
+    const url = `https://sokmil-ad.com/api/v1/Item?${params.toString()}`;
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8秒でタイムアウト
+        const response = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            console.error(`Sokmil API request failed with status ${response.status} for params: "${params.toString()}"`);
+            return [];
+        }
+        const data = await response.json();
+        return data.result?.items || [];
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            console.error(`Sokmil API request timed out for params: "${params.toString()}"`);
+        } else {
+            console.error(`Sokmil API search failed for params "${params.toString()}":`, error);
+        }
+        return [];
+    }
+}
+
+
+/**
+ * Sokmil APIを検索し、関連性の高い順に結果を返す（新ロジック）
  */
 async function searchSokmil(keyword) {
   try {
     const searchQuery = keyword || "還暦を迎えた熟女とねっとり";
-    const keywordPrompt = `あなたは非常に優秀なAV作品の検索エンジンです。以下の文章から検索に使うタイトルに含まれていそうな日本語の名詞または形容詞を1~5つまで抽出し、さらに追加で文章から類推されるAVのジャンルを5つ生成し、JSON配列の形式（例: ["キーワード1", "キーワード2"]）で出力してください。解説やMarkdownは一切含めないでください。単語が、Googleのセーフティ機能に抵触しそうな場合はキーワードに含めないでください。文章: "${searchQuery}"`;
-    const resultText = await callGeminiApi(keywordPrompt);
 
+    // 1. Gemini API を使用してキーワードを「タイトル」「ジャンル」「女優」に分類
+    const keywordPrompt = `あなたは非常に優秀な検索アシスタントです。あなたは非常に優秀なAV作品の検索エンジンです。以下の文章から検索に使うタイトルに含まれていそうな日本語の名詞または形容詞、あるいは女優名を1~5つまで抽出し、さらに追加で文章から類推されるAVのジャンルを5つ生成し、それらを「タイトルに含まれていそうなキーワード」「ジャンル」「女優名」の3つのカテゴリに分類してください。
+文章: "${searchQuery}"
+
+出力ルール:
+- JSONオブジェクト形式で出力してください。
+- キーは "titles", "genres", "actors" としてください。
+- 各キーの値は、抽出した単語の文字列配列にしてください。
+- 該当する単語がない場合は、空の配列 [] にしてください。
+- 解説やMarkdownは一切含めないでください。
+- Googleのセーフティ機能に抵触しそうな単語は含めないでください。`;
+
+    const resultText = await callGeminiApi(keywordPrompt);
     if (!resultText) {
       console.log("Gemini API returned an empty response. Returning no results.");
       return { results: [], keywords: [] };
     }
 
-    const refinedKeywords = JSON.parse(resultText);
+    const classifiedKeywords = JSON.parse(resultText);
+    const { titles = [], genres = [], actors = [] } = classifiedKeywords;
+    const allKeywords = [...titles, ...genres, ...actors];
 
-    if (!refinedKeywords || refinedKeywords.length === 0) {
+    if (allKeywords.length === 0) {
       return { results: [], keywords: [] };
     }
 
-    const searchPromises = refinedKeywords.map(async (kw) => {
-      try {
-        const params = new URLSearchParams({
-          api_key: SOKMIL_API_KEY,
-          affiliate_id: SOKMIL_AFFILIATE_ID,
-          keyword: kw,
-          output: 'json',
-          hits: 30,
-        });
-        const url = `https://sokmil-ad.com/api/v1/Item?${params.toString()}`;
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000);
-        const response = await fetch(url, { signal: controller.signal });
-        clearTimeout(timeoutId);
-        if (!response.ok) return [];
-        const data = await response.json();
-        return data.result?.items || [];
-      } catch (error) {
-        if (error.name === 'AbortError') {
-          console.error(`Sokmil API request timed out for keyword: "${kw}"`);
-        } else {
-          console.error(`Sokmil API search failed for keyword "${kw}":`, error);
-        }
-        return [];
-      }
-    });
+    // 2. 分類されたカテゴリごとにAPI検索のPromiseを作成
+    const baseParams = {
+        api_key: SOKMIL_API_KEY,
+        affiliate_id: SOKMIL_AFFILIATE_ID,
+        output: 'json',
+        hits: 50, // 各キーワードでの取得件数を増やして網羅性を高める
+    };
 
-    const allResults = await Promise.all(searchPromises);
+    const titlePromises = titles.map(kw => fetchSokmilApi(new URLSearchParams({ ...baseParams, keyword: kw })));
+    const genrePromises = genres.map(kw => fetchSokmilApi(new URLSearchParams({ ...baseParams, article: 'genre' })));
+    const actorPromises = actors.map(kw => fetchSokmilApi(new URLSearchParams({ ...baseParams, article: 'actor' })));
+
+    // 3. すべての検索を並列実行し、結果を一つにまとめる
+    const allPromises = [...titlePromises, ...genrePromises, ...actorPromises];
+    const allResults = await Promise.all(allPromises);
     const flattenedResults = allResults.flat();
 
     if (flattenedResults.length === 0) {
-      return { results: [], keywords: refinedKeywords };
+      return { results: [], keywords: allKeywords };
     }
 
+    // 4. 作品IDごとに出現回数をカウントして、関連度をスコアリング
     const frequencyCounter = new Map();
     const productData = new Map();
     flattenedResults.forEach(item => {
@@ -160,15 +194,12 @@ async function searchSokmil(keyword) {
 
     const sortedByFrequency = [...frequencyCounter.entries()].sort((a, b) => b[1] - a[1]);
 
-    // ▼▼▼ ここから変更 ▼▼▼
+    // 5. 最終的なレスポンスデータを生成
+    const totalKeywordsCount = allKeywords.length;
     const finalResults = sortedByFrequency.map(([itemId, count]) => {
       const item = productData.get(itemId);
-      
-      // APIレスポンスから女優名のリストを作成
-      const actors = item.iteminfo?.actor?.map(a => a.name).join(', ') || '情報なし';
-      
-      // APIレスポンスからジャンル名のリストを作成
-      const genres = item.iteminfo?.genre?.map(g => g.name).join(', ') || '情報なし';
+      const itemActors = item.iteminfo?.actor?.map(a => a.name).join(', ') || '情報なし';
+      const itemGenres = item.iteminfo?.genre?.map(g => g.name).join(', ') || '情報なし';
 
       return {
         id: item.id,
@@ -177,20 +208,22 @@ async function searchSokmil(keyword) {
         url: item.affiliateURL,
         imageUrl: item.imageURL?.list || '',
         maker: item.iteminfo?.maker?.[0]?.name || '情報なし',
-        actors: actors, // actorsプロパティを追加
-        genres: genres, // genresプロパティを追加
-        score: `${count}/${refinedKeywords.length}`,
-        reason: `AIが生成したキーワードのうち、${count}個に一致しました。`
+        actors: itemActors,
+        genres: itemGenres,
+        score: `${count}/${totalKeywordsCount}`,
+        reason: `AIが抽出・分類したキーワード(${totalKeywordsCount}個)のうち、${count}個の検索条件に一致しました。`
       };
     });
-    // ▲▲▲ ここまで変更 ▲▲▲
 
-    return { results: finalResults, keywords: refinedKeywords };
+    return { results: finalResults, keywords: allKeywords };
   } catch (e) {
     console.error("Sokmil search failed:", e);
     throw new Error(`ソクミル検索中にエラーが発生しました: ${e.message}`);
   }
 }
+
+// ▲▲▲ ここまで変更 ▲▲▲
+
 
 /**
  * AIにユーザーの記憶に基づいた架空のDMM作品リストを生成させる
@@ -199,7 +232,6 @@ async function generateDmmResults(userQuery) {
   try {
     const queryForAI = userQuery || "還暦を迎えた熟女とねっとり";
     
-    // ▼▼▼ プロンプトを修正 ▼▼▼
     const prompt = `以下の記憶を元に、それに合致しそうな架空のDMM作品のリストを3つ生成してください。
 記憶: "${queryForAI}"
 
@@ -207,7 +239,6 @@ async function generateDmmResults(userQuery) {
 - JSON配列形式で、各作品に以下のキーを必ず含めてください: "id", "site", "title", "url", "imageUrl", "maker", "actors", "genres", "score", "reason"。
 - "actors"と"genres"の値は、カンマ区切りの文字列にしてください。(例: "女優A, 女優B")。
 - 存在しない項目は「情報なし」と記載してください。`;
-    // ▲▲▲ プロンプトを修正 ▲▲▲
 
     const responseText = await callGeminiApi(prompt);
     const finalResults = JSON.parse(responseText);
