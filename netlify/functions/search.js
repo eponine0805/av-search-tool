@@ -155,7 +155,7 @@ async function searchSokmil(keyword) {
 
     const classifiedKeywords = JSON.parse(resultText);
     const { titles = [], genres = [], actors = [] } = classifiedKeywords;
-    const allKeywords = [...titles, ...genres, ...actors];
+    const allKeywords = [...actors, ...genres, ...titles];
 
     if (allKeywords.length === 0) {
       return { results: [], keywords: [] };
@@ -211,7 +211,7 @@ async function searchSokmil(keyword) {
         actors: itemActors,
         genres: itemGenres,
         score: `${count}/${totalKeywordsCount}`,
-        reason: `AIが抽出・分類したキーワード(${totalKeywordsCount}個)のうち、${count}個の検索条件に一致しました。`
+        reason: `キーワード(${totalKeywordsCount}個)のうち、${count}個の検索条件に一致しました。`
       };
     });
 
