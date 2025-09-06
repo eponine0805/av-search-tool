@@ -136,7 +136,7 @@ async function searchSokmil(keyword) {
     const searchQuery = keyword || "還暦を迎えた熟女とねっとり";
 
     // 1. Gemini API を使用してキーワードを「タイトル」「ジャンル」「女優」に分類
-    const keywordPrompt = `あなたは非常に優秀な検索アシスタントです。あなたは非常に優秀なAV作品の検索エンジンです。以下の文章から検索に使うタイトルに含まれていそうな日本語の名詞または形容詞あるいは女優名を1~5つまで抽出し、さらに追加で文章から類推されるAVのジャンルを5つ生成し、それらを「タイトルに含まれていそうなキーワード」「ジャンル」「女優名」の3つのカテゴリに分類してください。
+    const keywordPrompt = `あなたは非常に優秀な検索アシスタントです。あなたは非常に優秀なAV作品の検索エンジンです。以下の文章から検索に使うタイトルに含まれていそうな日本語の名詞または形容詞あるいは女優名を1~5つまで抽出し、さらに追加で文章から類推されるAVのジャンルを3つ生成し、それらを「タイトルに含まれていそうなキーワード」「ジャンル」「女優名」の3つのカテゴリに分類してください。
 文章: "${searchQuery}"
 
 出力ルール:
@@ -174,7 +174,7 @@ async function searchSokmil(keyword) {
     const actorPromises = actors.map(kw => fetchSokmilApi(new URLSearchParams({ ...baseParams, keyword: kw, article: 'actor' })));
 
     // 3. すべての検索を並列実行し、結果を一つにまとめる
-    const allPromises = [...titlePromises, ...genrePromises, ...actorPromises];
+    const allPromises = [...actorPromises, ...genrePromises, ...titlePromises];
     const allResults = await Promise.all(allPromises);
     const flattenedResults = allResults.flat();
 
