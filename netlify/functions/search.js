@@ -166,7 +166,7 @@ async function searchSokmil(keyword) {
     // 2. 分類されたカテゴリごとにAPI検索のPromiseを作成
     const baseParams = {
         api_key: SOKMIL_API_KEY,
-        affiliate_id: SOKMIL_AFFiliate_ID,
+        affiliate_id: SOKMIL_AFFILIATE_ID,
         output: 'json',
         hits: 20,
     };
