@@ -154,7 +154,7 @@ async function searchSokmil(keyword) {
     }
 
     const classifiedKeywords = JSON.parse(resultText);
-    const { titles = [], genres = [], actors = [] } = classifiedKeywords;
+    const { kyeword = [], actors = [] } = classifiedKeywords;
     const allKeywords = [...actors, ...keyword];
 
     if (allKeywords.length === 0) {
