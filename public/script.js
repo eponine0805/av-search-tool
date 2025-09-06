@@ -68,14 +68,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 const score = item.score || '評価なし';
                 const reason = item.reason || '評価理由なし';
                 
+                // ▼▼▼ 女優とジャンルの情報を取得 ▼▼▼
+                const actors = item.actors || '情報なし';
+                const genres = item.genres || '情報なし';
+                
                 const itemElement = document.createElement('div');
                 itemElement.className = 'item';
+
+                // ▼▼▼ HTMLに出演者とジャンルを追加 ▼▼▼
                 itemElement.innerHTML = `
                     <img src="${imageURL}" alt="${title}">
                     <div class="item-info">
                         <h3><a href="${affiliateURL}" target="_blank" rel="noopener noreferrer">${title}</a></h3>
                         <p><strong>サイト:</strong> ${siteName}</p>
                         <p><strong>メーカー:</strong> ${maker}</p>
+                        <p><strong>出演者:</strong> ${actors}</p>
+                        <p><strong>ジャンル:</strong> ${genres}</p>
                         <p class="score">AIによる一致度: ${score}</p>
                         <p><strong>AIの評価理由:</strong> ${reason}</p>
                     </div>
