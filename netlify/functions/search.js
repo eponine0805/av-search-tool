@@ -101,7 +101,7 @@ exports.handler = async (event) => {
 async function searchSokmil(keyword) {
   try {
     const searchQuery = keyword || "新人";
-    const keywordPrompt = `あなたは非常に優秀なAV作品の検索エンジンです。以下の文章から検索に使う日本語の名詞または形容詞を1~3つまで抽出し、さらに追加で文章から類推される単語を2つ生成し、JSON配列の形式（例: ["キーワード1", "キーワード2"]）で出力してください。解説やMarkdownは一切含めないでください。単語が、Googleのセーフティ機能に抵触しそうな場合はキーワードに含めないでください。文章: "${searchQuery}"`;
+    const keywordPrompt = `あなたは非常に優秀なAV作品の検索エンジンです。以下の文章から検索に使う日本語の名詞または形容詞を１~５つまで抽出し、さらに追加で文章から類推される単語を３つ生成し、JSON配列の形式（例: ["キーワード1", "キーワード2"]）で出力してください。解説やMarkdownは一切含めないでください。単語が、Googleのセーフティ機能に抵触しそうな場合はキーワードに含めないでください。文章: "${searchQuery}"`;
     const resultText = await callGeminiApi(keywordPrompt);
 
     if (!resultText) {
