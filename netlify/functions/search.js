@@ -136,12 +136,12 @@ async function searchSokmil(keyword) {
     const searchQuery = keyword || "還暦を迎えた熟女とねっとり";
 
     // 1. Gemini API を使用してキーワードを「タイトル」「ジャンル」「女優」に分類
-    const keywordPrompt = `あなたは非常に優秀な検索アシスタントです。あなたは非常に優秀なAV作品の検索エンジンです。以下の文章から検索に使うタイトルに含まれていそうな日本語の名詞または形容詞あるいは女優名を1~5つまで抽出し、さらに追加で文章から類推されるAVのジャンルを3つ生成し、それらを「ジャンル」「女優名」「タイトルに含まれていそうなキーワード」の3つのカテゴリに分類してください。
+    const keywordPrompt = `あなたは非常に優秀な検索アシスタントです。あなたは非常に優秀なAV作品の検索エンジンです。以下の文章から検索に使うタイトルに含まれていそうな日本語の名詞または形容詞あるいは女優名を1~5つまで抽出し、さらに追加で文章から類推されるAVのジャンルを3つ生成し、それらを「女優名」「キーワード」の2つのカテゴリに分類してください。
 文章: "${searchQuery}"
 
 出力ルール:
 - JSONオブジェクト形式で出力してください。
-- キーは "titles", "genres", "actors" としてください。
+- キーは "keyword", "actors" としてください。
 - 各キーの値は、抽出した単語の文字列配列にしてください。
 - 該当する単語がない場合は、空の配列 [] にしてください。
 - 解説やMarkdownは一切含めないでください。
@@ -155,7 +155,7 @@ async function searchSokmil(keyword) {
 
     const classifiedKeywords = JSON.parse(resultText);
     const { titles = [], genres = [], actors = [] } = classifiedKeywords;
-    const allKeywords = [...actors, ...genres, ...titles];
+    const allKeywords = [...actors, ...keyword];
 
     if (allKeywords.length === 0) {
       return { results: [], keywords: [] };
@@ -170,11 +170,10 @@ async function searchSokmil(keyword) {
     };
 
     const titlePromises = titles.map(kw => fetchSokmilApi(new URLSearchParams({ ...baseParams, keyword: kw })));
-    const genrePromises = genres.map(kw => fetchSokmilApi(new URLSearchParams({ ...baseParams, keyword: kw, article: 'genre' })));
     const actorPromises = actors.map(kw => fetchSokmilApi(new URLSearchParams({ ...baseParams, keyword: kw, article: 'actor' })));
 
     // 3. すべての検索を並列実行し、結果を一つにまとめる
-    const allPromises = [...actorPromises, ...genrePromises, ...titlePromises];
+    const allPromises = [...actorPromises, ...titlePromises];
     const allResults = await Promise.all(allPromises);
     const flattenedResults = allResults.flat();
 
