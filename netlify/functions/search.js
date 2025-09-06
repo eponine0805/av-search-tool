@@ -125,16 +125,11 @@ async function searchSokmil(keyword) {
           hits: 30,
         });
         const url = `https://sokmil-ad.com/api/v1/Item?${params.toString()}`;
-
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8秒でタイムアウト
-
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
         const response = await fetch(url, { signal: controller.signal });
-
         clearTimeout(timeoutId);
-
         if (!response.ok) return [];
-
         const data = await response.json();
         return data.result?.items || [];
       } catch (error) {
@@ -157,6 +152,7 @@ async function searchSokmil(keyword) {
     const frequencyCounter = new Map();
     const productData = new Map();
     flattenedResults.forEach(item => {
+      if (!item || !item.id) return;
       const currentCount = frequencyCounter.get(item.id) || 0;
       frequencyCounter.set(item.id, currentCount + 1);
       if (!productData.has(item.id)) productData.set(item.id, item);
@@ -164,19 +160,30 @@ async function searchSokmil(keyword) {
 
     const sortedByFrequency = [...frequencyCounter.entries()].sort((a, b) => b[1] - a[1]);
 
+    // ▼▼▼ ここから変更 ▼▼▼
     const finalResults = sortedByFrequency.map(([itemId, count]) => {
       const item = productData.get(itemId);
+      
+      // APIレスポンスから女優名のリストを作成
+      const actors = item.iteminfo?.actor?.map(a => a.name).join(', ') || '情報なし';
+      
+      // APIレスポンスからジャンル名のリストを作成
+      const genres = item.iteminfo?.genre?.map(g => g.name).join(', ') || '情報なし';
+
       return {
         id: item.id,
         site: 'ソクミル',
         title: item.title,
         url: item.affiliateURL,
-        imageUrl: item.imageURL.list,
-        maker: item.iteminfo.maker ? item.iteminfo.maker[0].name : '情報なし',
+        imageUrl: item.imageURL?.list || '',
+        maker: item.iteminfo?.maker?.[0]?.name || '情報なし',
+        actors: actors, // actorsプロパティを追加
+        genres: genres, // genresプロパティを追加
         score: `${count}/${refinedKeywords.length}`,
         reason: `AIが生成したキーワードのうち、${count}個に一致しました。`
       };
     });
+    // ▲▲▲ ここまで変更 ▲▲▲
 
     return { results: finalResults, keywords: refinedKeywords };
   } catch (e) {
@@ -191,7 +198,16 @@ async function searchSokmil(keyword) {
 async function generateDmmResults(userQuery) {
   try {
     const queryForAI = userQuery || "還暦を迎えた熟女とねっとり";
-    const prompt = `以下の記憶を元に、それに合致しそうな架-空のDMM作品のリストを3つ生成してください。記憶: "${queryForAI}" 出力ルール: JSON配列形式で、各作品に以下のキーを含めてください: id, site, title, url, imageUrl, maker, score, reason`;
+    
+    // ▼▼▼ プロンプトを修正 ▼▼▼
+    const prompt = `以下の記憶を元に、それに合致しそうな架空のDMM作品のリストを3つ生成してください。
+記憶: "${queryForAI}"
+
+出力ルール:
+- JSON配列形式で、各作品に以下のキーを必ず含めてください: "id", "site", "title", "url", "imageUrl", "maker", "actors", "genres", "score", "reason"。
+- "actors"と"genres"の値は、カンマ区切りの文字列にしてください。(例: "女優A, 女優B")。
+- 存在しない項目は「情報なし」と記載してください。`;
+    // ▲▲▲ プロンプトを修正 ▲▲▲
 
     const responseText = await callGeminiApi(prompt);
     const finalResults = JSON.parse(responseText);
