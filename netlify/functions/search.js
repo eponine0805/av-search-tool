@@ -145,7 +145,6 @@ async function searchSokmil(keyword) {
 - 各キーの値は、抽出した単語の文字列配列にしてください。
 - 該当する単語がない場合は、空の配列 [] にしてください。
 - 解説やMarkdownは一切含めないでください。
-- { titles = [], genres = [], actors = [] }のような形式で取得できる形にしてください。
 - Googleのセーフティ機能に抵触しそうな単語は含めないでください。`;
 
     const resultText = await callGeminiApi(keywordPrompt);
@@ -171,8 +170,8 @@ async function searchSokmil(keyword) {
     };
 
     const titlePromises = titles.map(kw => fetchSokmilApi(new URLSearchParams({ ...baseParams, keyword: kw })));
-    const genrePromises = genres.map(kw => fetchSokmilApi(new URLSearchParams({ ...baseParams, article: 'genre' })));
-    const actorPromises = actors.map(kw => fetchSokmilApi(new URLSearchParams({ ...baseParams, article: 'actor' })));
+    const genrePromises = genres.map(kw => fetchSokmilApi(new URLSearchParams({ ...baseParams, keyword: kw, article: 'genre' })));
+    const actorPromises = actors.map(kw => fetchSokmilApi(new URLSearchParams({ ...baseParams, keyword: kw, article: 'actor' })));
 
     // 3. すべての検索を並列実行し、結果を一つにまとめる
     const allPromises = [...titlePromises, ...genrePromises, ...actorPromises];
