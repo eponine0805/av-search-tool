@@ -141,7 +141,7 @@ async function searchSokmil(keyword) {
 
 出力ルール:
 - JSONオブジェクト形式で出力してください。
-- キーは "keyword", "actors" としてください。
+- キーは "keywords", "actors" としてください。
 - 各キーの値は、抽出した単語の文字列配列にしてください。
 - 該当する単語がない場合は、空の配列 [] にしてください。
 - 解説やMarkdownは一切含めないでください。
@@ -154,8 +154,10 @@ async function searchSokmil(keyword) {
     }
 
     const classifiedKeywords = JSON.parse(resultText);
-    const { kyeword = [], actors = [] } = classifiedKeywords;
-    const allKeywords = [...actors, ...keyword];
+    
+    // ▼▼▼ 修正点1: キー名をプロンプトに合わせて "keywords" に修正 ▼▼▼
+    const { keywords = [], actors = [] } = classifiedKeywords;
+    const allKeywords = [...keywords, ...actors];
 
     if (allKeywords.length === 0) {
       return { results: [], keywords: [] };
@@ -164,16 +166,18 @@ async function searchSokmil(keyword) {
     // 2. 分類されたカテゴリごとにAPI検索のPromiseを作成
     const baseParams = {
         api_key: SOKMIL_API_KEY,
-        affiliate_id: SOKMIL_AFFILIATE_ID,
+        affiliate_id: SOKMIL_AFFiliate_ID,
         output: 'json',
-        hits: 20, // 各キーワードでの取得件数を増やして網羅性を高める
+        hits: 20,
     };
 
-    const titlePromises = titles.map(kw => fetchSokmilApi(new URLSearchParams({ ...baseParams, keyword: kw })));
+    // ▼▼▼ 修正点2: 変数名を keywords に合わせ、汎用的なキーワード検索を作成 ▼▼▼
+    const keywordPromises = keywords.map(kw => fetchSokmilApi(new URLSearchParams({ ...baseParams, keyword: kw })));
     const actorPromises = actors.map(kw => fetchSokmilApi(new URLSearchParams({ ...baseParams, keyword: kw, article: 'actor' })));
 
     // 3. すべての検索を並列実行し、結果を一つにまとめる
-    const allPromises = [...actorPromises, ...titlePromises];
+    // ▼▼▼ 修正点3: 変数名を修正後のものに合わせる ▼▼▼
+    const allPromises = [...actorPromises, ...keywordPromises];
     const allResults = await Promise.all(allPromises);
     const flattenedResults = allResults.flat();
 
@@ -181,7 +185,7 @@ async function searchSokmil(keyword) {
       return { results: [], keywords: allKeywords };
     }
 
-    // 4. 作品IDごとに出現回数をカウントして、関連度をスコアリング
+    // 4. 作品IDごとに出現回数をカウントして、関連度をスコアリング (変更なし)
     const frequencyCounter = new Map();
     const productData = new Map();
     flattenedResults.forEach(item => {
@@ -193,7 +197,7 @@ async function searchSokmil(keyword) {
 
     const sortedByFrequency = [...frequencyCounter.entries()].sort((a, b) => b[1] - a[1]);
 
-    // 5. 最終的なレスポンスデータを生成
+    // 5. 最終的なレスポンスデータを生成 (reasonの文言を少し修正)
     const totalKeywordsCount = allKeywords.length;
     const finalResults = sortedByFrequency.map(([itemId, count]) => {
       const item = productData.get(itemId);
@@ -210,7 +214,7 @@ async function searchSokmil(keyword) {
         actors: itemActors,
         genres: itemGenres,
         score: `${count}/${totalKeywordsCount}`,
-        reason: `キーワード(${totalKeywordsCount}個)のうち、${count}個の検索条件に一致しました。`
+        reason: `AIが抽出したキーワード(${totalKeywordsCount}個)のうち、${count}個の検索条件に一致しました。`
       };
     });
 
