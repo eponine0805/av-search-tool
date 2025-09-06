@@ -1,18 +1,19 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // --- DOM要素の取得 ---
     const searchInput = document.getElementById('searchInput');
     const dmmSearchButton = document.getElementById('dmmSearchButton');
     const sokmilSearchButton = document.getElementById('sokmilSearchButton');
     const loader = document.getElementById('loader');
     const resultsContainer = document.getElementById('results');
 
-    dmmSearchButton.addEventListener('click', () => {
-        performSearch('dmm');
-    });
+    // --- イベントリスナーの設定 ---
+    dmmSearchButton.addEventListener('click', () => performSearch('dmm'));
+    sokmilSearchButton.addEventListener('click', () => performSearch('sokmil'));
 
-    sokmilSearchButton.addEventListener('click', () => {
-        performSearch('sokmil');
-    });
-
+    /**
+     * サーバーに検索リクエストを送信し、結果を表示する
+     * @param {string} searchType - 検索タイプ ('dmm' または 'sokmil')
+     */
     const performSearch = async (searchType) => {
         const query = searchInput.value.trim();
         if (!query) {
@@ -20,6 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // UIを検索中状態に更新
         loader.style.display = 'block';
         resultsContainer.innerHTML = '';
         dmmSearchButton.disabled = true;
@@ -32,55 +34,58 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ userQuery: query, type: searchType }),
             });
 
+            const data = await response.json();
+
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || `サーバーエラー: ${response.status}`);
+                // サーバーからのエラーメッセージがあればそれを表示
+                throw new Error(data.error || `サーバーエラーが発生しました (Status: ${response.status})`);
             }
 
-            const data = await response.json();
             displayResults(data);
 
         } catch (error) {
+            console.error("Search Error:", error);
             resultsContainer.innerHTML = `<p>エラーが発生しました: ${error.message}</p>`;
         } finally {
+            // UIを検索完了状態に戻す
             loader.style.display = 'none';
             dmmSearchButton.disabled = false;
             sokmilSearchButton.disabled = false;
         }
     };
-    
-    function displayResults(data) {
-        resultsContainer.innerHTML = '';
 
-        const results = data.results;
-        const keywords = data.keywords;
-        const message = data.message;
-        
-        if (keywords && Object.values(keywords).some(v => v && (Array.isArray(v) ? v.length > 0 : v))) {
-             const keywordsContainer = document.createElement('div');
-            keywordsContainer.className = 'keywords-info';
-            let html = '<strong>AIが特定した検索キーワード:</strong><dl>';
-            if(keywords.actor) html += `<dt>女優</dt><dd>${keywords.actor}</dd>`;
-            if(keywords.series) html += `<dt>シリーズ</dt><dd>${keywords.series}</dd>`;
-            if(keywords.genres && keywords.genres.length > 0) html += `<dt>ジャンル</dt><dd>${keywords.genres.join(', ')}</dd>`;
-            if(keywords.titles && keywords.titles.length > 0) html += `<dt>タイトル</dt><dd>${keywords.titles.join(', ')}</dd>`;
-            html += '</dl>';
-            keywordsContainer.innerHTML = html;
-            resultsContainer.appendChild(keywordsContainer);
+    /**
+     * 取得したデータを画面に描画する
+     * @param {object} data - サーバーから返されたデータ
+     * @param {Array<object>} data.results - 検索結果の配列
+     * @param {Array<string>} data.keywords - AIが抽出したキーワードの配列
+     * @param {string} [data.message] - 結果がない場合などのメッセージ
+     */
+    function displayResults(data) {
+        resultsContainer.innerHTML = ''; // コンテナをクリア
+
+        // AIが抽出したキーワードを表示
+        if (data.keywords && data.keywords.length > 0) {
+            const keywordsElement = document.createElement('p');
+            keywordsElement.className = 'keywords-info';
+            keywordsElement.innerHTML = `<strong>AIが抽出したキーワード:</strong> ${data.keywords.join(', ')}`;
+            resultsContainer.appendChild(keywordsElement);
         }
 
-        if (results && results.length > 0) {
-            results.forEach(item => {
+        // 検索結果を表示
+        if (data.results && data.results.length > 0) {
+            data.results.forEach(item => {
+                const itemElement = document.createElement('div');
+                itemElement.className = 'item';
+                
+                // 各プロパティにデフォルト値を設定してエラーを防ぐ
                 const title = item.title || 'タイトルなし';
                 const affiliateURL = item.url || '#';
                 const imageURL = item.imageUrl || 'https://via.placeholder.com/200x300.png?text=No+Image';
-                const siteName = item.site || '';
+                const siteName = item.site || '情報なし';
                 const maker = item.maker || '情報なし';
-                const actors = item.actors || '情報なし';
-                const genres = item.genres || '情報なし';
-                
-                const itemElement = document.createElement('div');
-                itemElement.className = 'item';
+                const score = item.score || '評価なし';
+                const reason = item.reason || '評価理由なし';
 
                 itemElement.innerHTML = `
                     <img src="${imageURL}" alt="${title}">
@@ -88,16 +93,17 @@ document.addEventListener('DOMContentLoaded', () => {
                         <h3><a href="${affiliateURL}" target="_blank" rel="noopener noreferrer">${title}</a></h3>
                         <p><strong>サイト:</strong> ${siteName}</p>
                         <p><strong>メーカー:</strong> ${maker}</p>
-                        <p><strong>出演者:</strong> ${actors}</p>
-                        <p><strong>ジャンル:</strong> ${genres}</p>
+                        <p class="score"><strong>AIによる一致度:</strong> ${score}</p>
+                        <p><strong>AIの評価理由:</strong> ${reason}</p>
                     </div>
                 `;
                 resultsContainer.appendChild(itemElement);
             });
         } else {
-             const noResultsElement = document.createElement('p');
-             noResultsElement.textContent = message || '一致する作品が見つかりませんでした。';
-             resultsContainer.appendChild(noResultsElement);
+             // 結果が0件の場合のメッセージを表示
+            const messageElement = document.createElement('p');
+            messageElement.textContent = data.message || '一致する作品が見つかりませんでした。';
+            resultsContainer.appendChild(messageElement);
         }
     }
 });
