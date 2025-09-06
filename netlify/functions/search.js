@@ -133,7 +133,7 @@ async function fetchSokmilApi(params) {
  */
 async function searchSokmil(keyword) {
   try {
-    const searchQuery = keyword || "還暦を迎えた熟女とねっとり";
+    const searchQuery = keyword || "還暦を迎えた60代とねっとりセックス";
 
     // 1. Gemini API を使用してキーワードを「キーワード」「女優」に分類
     const keywordPrompt = `あなたは非常に優秀な検索アシスタントです。あなたは非常に優秀なAV作品の検索エンジンです。以下の文章から検索に使うタイトルに含まれていそうな日本語の名詞または形容詞あるいは女優名を1~5つまで抽出し、さらに追加で文章から類推されるAVのジャンルを3つ生成し、それらを「女優名」「キーワード」の2つのカテゴリに分類してください。
@@ -232,7 +232,7 @@ async function searchSokmil(keyword) {
  */
 async function generateDmmResults(userQuery) {
   try {
-    const queryForAI = userQuery || "還暦を迎えた熟女とねっとり";
+    const queryForAI = userQuery || "還暦を迎えた60代とねっとりセックス";
     
     const prompt = `以下の記憶を元に、それに合致しそうな架空のDMM作品のリストを3つ生成してください。
 記憶: "${queryForAI}"
