@@ -14,12 +14,19 @@
         .item { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; display: flex; align-items: flex-start; }
         .item img { max-width: 200px; margin-right: 15px; }
         .item-info .score { font-weight: bold; color: #d9534f; }
-        .sokmil-credit {
+
+        /* ▼▼▼ CSSの変更箇所 ▼▼▼ */
+        .credits-container {
             position: fixed;
             right: 15px;
             bottom: 15px;
             z-index: 999;
         }
+        .DMM-credit {
+            margin-bottom: 5px; /* DMMとソクミルのクレジット間に余白を追加 */
+        }
+        /* ▲▲▲ CSSの変更ここまで ▲▲▲ */
+
     </style>
     <script src="script.js" defer></script>
 </head>
@@ -36,11 +43,13 @@
         <div id="results"></div>
     </div>
 
-    <div class="sokmil-credit">
-        <a href="https://sokmil-ad.com/" target="_blank" rel="nofollow"><img src="https://sokmil-ad.com/api/credit/135x18.gif" alt="WEB SERVICE BY SOKMIL" width="135" height="18" border="0"></a>
+    <div class="credits-container">
+        <div class="DMM-credit">
+            <a href="https://affiliate.dmm.com/api/" target="_blank" rel="nofollow"><img src="https://pics.dmm.com/af/web_service/com_135_17.gif" alt="WEB SERVICE BY DMM.com" width="135" height="17" border="0"></a>
+        </div>
+        <div class="sokmil-credit">
+            <a href="https://sokmil-ad.com/" target="_blank" rel="nofollow"><img src="https://sokmil-ad.com/api/credit/135x18.gif" alt="WEB SERVICE BY SOKMIL" width="135" height="18" border="0"></a>
+        </div>
     </div>
-    <div class="DMM-credit">
-        <a href="https://affiliate.dmm.com/api/" target="_blank" rel="nofollow"><img src="https://pics.dmm.com/af/web_service/com_135_17.gif" alt="WEB SERVICE BY DMM.com" width="135" height="17" border="0"></a>
-    </div>
-</body>
+    </body>
 </html>
