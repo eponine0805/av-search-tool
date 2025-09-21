@@ -301,7 +301,6 @@ async function searchDmm(keyword) {
     const keywordPromises = keywords.map(kw => fetchDmmApi(new URLSearchParams({ ...baseParams, keyword: kw })));
     const actorPromises = actors.map(kw => {
         const params = new URLSearchParams(baseParams);
-        params.append('keyword', kw);
         params.append('article[0]', 'actress'); // パラメータ名を配列形式に変更
         return fetchDmmApi(params);
     });
