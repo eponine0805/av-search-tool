@@ -299,8 +299,12 @@ async function searchDmm(keyword) {
 
     // 1. 「キーワード」と「女優」でAPIリクエストを分けて作成
     const keywordPromises = keywords.map(kw => fetchDmmApi(new URLSearchParams({ ...baseParams, keyword: kw })));
-    // ★★★ 女優検索時には article=actress を正しく付与 ★★★
-    const actorPromises = actors.map(kw => fetchDmmApi(new URLSearchParams({ ...baseParams, keyword: kw, article: 'actress' })));
+    const actorPromises = actors.map(kw => {
+        const params = new URLSearchParams(baseParams);
+        params.append('keyword', kw);
+        params.append('article[0]', 'actress'); // パラメータ名を配列形式に変更
+        return fetchDmmApi(params);
+    });
 
     // 2. すべての検索を並列実行し、結果を一つにまとめる (元のシンプルなロジックに戻す)
     const allPromises = [...actorPromises, ...keywordPromises];
