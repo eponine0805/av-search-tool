@@ -14,13 +14,11 @@
         .item { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; display: flex; align-items: flex-start; }
         .item img { max-width: 200px; margin-right: 15px; }
         .item-info .score { font-weight: bold; color: #d9534f; }
-
-        /* ▼▼▼ このCSSを追加 ▼▼▼ */
         .sokmil-credit {
-            position: fixed; /* 画面上の特定の位置に固定 */
-            right: 15px;     /* 画面の右端から15pxの位置 */
-            bottom: 15px;    /* 画面の下端から15pxの位置 */
-            z-index: 999;    /* 他の要素より手前に表示 */
+            position: fixed;
+            right: 15px;
+            bottom: 15px;
+            z-index: 999;
         }
     </style>
     <script src="script.js" defer></script>
@@ -31,7 +29,7 @@
         <p>女優、シチュエーション、セリフなど覚えていることを自由に入力してください。</p>
         <textarea id="searchInput" placeholder="例: ショートヘアの新人OLが出張先の旅館で上司と..."></textarea>
         
-        <button id="dmmSearchButton">AIで偽物生成(おもちゃ)</button>
+        <button id="dmmSearchButton">DMMで検索</button>
         <button id="sokmilSearchButton">ソクミルで検索</button>
         
         <div class="loader" id="loader">検索中...</div>
