@@ -254,7 +254,7 @@ async function fetchDmmApi(params) {
     }
 }
 /**
- * DMM APIを検索し、関連性の高い順に結果を返す
+ * DMM APIを検索し、articleパラメータを利用して女優を優先し、関連性の高い順に結果を返す
  */
 async function searchDmm(keyword) {
   try {
@@ -278,7 +278,6 @@ async function searchDmm(keyword) {
 
     const classifiedKeywords = JSON.parse(resultText);
     const { keywords = [], actors = [] } = classifiedKeywords;
-    // 女優名もキーワードも、すべて同じキーワードとして扱う
     const allKeywords = [...keywords, ...actors];
 
     if (allKeywords.length === 0) {
@@ -296,11 +295,15 @@ async function searchDmm(keyword) {
       sort: 'match',
     };
 
-    // 'article' パラメータを使わず、全てのキーワードで ItemList API を検索する
-    const allPromises = allKeywords.map(kw => 
-      fetchDmmApi(new URLSearchParams({ ...baseParams, keyword: kw }))
-    );
+    // ▼▼▼ ここからロジックを修正 ▼▼▼
 
+    // 1. 「キーワード」と「女優」でAPIリクエストを分けて作成
+    const keywordPromises = keywords.map(kw => fetchDmmApi(new URLSearchParams({ ...baseParams, keyword: kw })));
+    // ★★★ 女優検索時には article=actress を正しく付与 ★★★
+    const actorPromises = actors.map(kw => fetchDmmApi(new URLSearchParams({ ...baseParams, keyword: kw, article: 'actress' })));
+
+    // 2. すべての検索を並列実行し、結果を一つにまとめる (元のシンプルなロジックに戻す)
+    const allPromises = [...actorPromises, ...keywordPromises];
     const allResults = await Promise.all(allPromises);
     const flattenedResults = allResults.flat();
 
@@ -308,6 +311,7 @@ async function searchDmm(keyword) {
       return { results: [], keywords: allKeywords };
     }
 
+    // 3. 作品IDごとに出現回数をカウントして、関連度をスコアリング
     const frequencyCounter = new Map();
     const productData = new Map();
     flattenedResults.forEach(item => {
@@ -319,6 +323,7 @@ async function searchDmm(keyword) {
 
     const sortedByFrequency = [...frequencyCounter.entries()].sort((a, b) => b[1] - a[1]);
 
+    // 4. 最終的なレスポンスデータを生成
     const totalKeywordsCount = allKeywords.length;
     const finalResults = sortedByFrequency.map(([itemId, count]) => {
       const item = productData.get(itemId);
@@ -335,8 +340,8 @@ async function searchDmm(keyword) {
         maker: item.iteminfo?.maker?.[0]?.name || '情報なし',
         actors: itemActors,
         genres: itemGenres,
-        score: `${count}/${totalKeywordsCount}`,
-        reason: `キーワード(${totalKeywordsCount}個)のうち、${count}個の検索条件に一致しました。`
+        score: `${count}/${totalKeywordsCount}`, // 元のスコア表示に戻す
+        reason: `キーワード(${totalKeywordsCount}個)のうち、${count}個の検索条件に一致しました。` // 元の理由表示に戻す
       };
     });
 
