@@ -4,9 +4,13 @@
 const GEMINI_API_KEY = process.env.GOOGLE_GEMINI_API_KEY;
 const SOKMIL_API_KEY = process.env.SOKMIL_API_KEY;
 const SOKMIL_AFFILIATE_ID = process.env.SOKMIL_AFFILIATE_ID;
+// ▼▼▼ DMM用の環境変数を追加 ▼▼▼
+const DMM_API_KEY = process.env.DMM_API_KEY;
+const DMM_AFFILIATE_ID = process.env.DMM_AFFILIATE_ID;
+
 
 /**
- * Gemini APIを「JSONモード」で呼び出すためのヘルパー関数
+ * Gemini APIを「JSONモード」で呼び出すためのヘルパー関数 (変更なし)
  * @param {string} prompt Geminiに送信するプロンプト文字列
  * @returns {Promise<string>} GeminiからのJSONテキスト応答
  */
@@ -66,8 +70,9 @@ exports.handler = async (event) => {
     const { userQuery, type } = JSON.parse(event.body);
     let responseData = {};
 
+    // ▼▼▼ DMM検索の呼び出し先を新しい searchDmm 関数に変更 ▼▼▼
     if (type === 'dmm') {
-      responseData = await generateDmmResults(userQuery);
+      responseData = await searchDmm(userQuery);
     } else if (type === 'sokmil') {
       responseData = await searchSokmil(userQuery);
     } else {
@@ -96,10 +101,10 @@ exports.handler = async (event) => {
 };
 
 
-// ▼▼▼ ここから変更 ▼▼▼
+// --- Sokmil API 関連の関数 ---
 
 /**
- * Sokmil APIを呼び出して検索結果を取得するヘルパー関数
+ * Sokmil APIを呼び出して検索結果を取得するヘルパー関数 (変更なし)
  * @param {URLSearchParams} params APIリクエストのパラメータ
  * @returns {Promise<Array>} 検索結果のアイテム配列
  */
@@ -129,13 +134,12 @@ async function fetchSokmilApi(params) {
 
 
 /**
- * Sokmil APIを検索し、関連性の高い順に結果を返す（新ロジック）
+ * Sokmil APIを検索し、関連性の高い順に結果を返す（変更なし）
  */
 async function searchSokmil(keyword) {
   try {
     const searchQuery = keyword || "還暦を迎えた60代とねっとりセックス";
 
-    // 1. Gemini API を使用してキーワードを「キーワード」「女優」に分類
     const keywordPrompt = `あなたは非常に優秀なAV作品の検索エンジンです。以下の文章から日本語の名詞または形容詞あるいは人物名を1~5つまで抽出し、さらに文章から推測されるAVのジャンルを3つ生成し、それら合計4~8つの単語を「女優名」「キーワード」の2つのカテゴリに分類してください。
 文章: "${searchQuery}"
 
@@ -153,8 +157,6 @@ async function searchSokmil(keyword) {
     }
 
     const classifiedKeywords = JSON.parse(resultText);
-    
-    // ▼▼▼ 修正点1: キー名をプロンプトに合わせて "keywords" に修正 ▼▼▼
     const { keywords = [], actors = [] } = classifiedKeywords;
     const allKeywords = [...keywords, ...actors];
 
@@ -162,7 +164,6 @@ async function searchSokmil(keyword) {
       return { results: [], keywords: [] };
     }
 
-    // 2. 分類されたカテゴリごとにAPI検索のPromiseを作成
     const baseParams = {
         api_key: SOKMIL_API_KEY,
         affiliate_id: SOKMIL_AFFILIATE_ID,
@@ -170,12 +171,9 @@ async function searchSokmil(keyword) {
         hits: 30,
     };
 
-    // ▼▼▼ 修正点2: 変数名を keywords に合わせ、汎用的なキーワード検索を作成 ▼▼▼
     const keywordPromises = keywords.map(kw => fetchSokmilApi(new URLSearchParams({ ...baseParams, keyword: kw })));
     const actorPromises = actors.map(kw => fetchSokmilApi(new URLSearchParams({ ...baseParams, keyword: kw, article: 'actor' })));
 
-    // 3. すべての検索を並列実行し、結果を一つにまとめる
-    // ▼▼▼ 修正点3: 変数名を修正後のものに合わせる ▼▼▼
     const allPromises = [...actorPromises, ...keywordPromises];
     const allResults = await Promise.all(allPromises);
     const flattenedResults = allResults.flat();
@@ -184,7 +182,6 @@ async function searchSokmil(keyword) {
       return { results: [], keywords: allKeywords };
     }
 
-    // 4. 作品IDごとに出現回数をカウントして、関連度をスコアリング (変更なし)
     const frequencyCounter = new Map();
     const productData = new Map();
     flattenedResults.forEach(item => {
@@ -196,7 +193,6 @@ async function searchSokmil(keyword) {
 
     const sortedByFrequency = [...frequencyCounter.entries()].sort((a, b) => b[1] - a[1]);
 
-    // 5. 最終的なレスポンスデータを生成 (reasonの文言を少し修正)
     const totalKeywordsCount = allKeywords.length;
     const finalResults = sortedByFrequency.map(([itemId, count]) => {
       const item = productData.get(itemId);
@@ -208,8 +204,8 @@ async function searchSokmil(keyword) {
         site: 'ソクミル',
         title: item.title,
         url: item.affiliateURL,
-        imageUrl: item.imageURL?.list || '', // 小さい画像のURL
-        largeImageUrl: item.imageURL?.large || item.imageURL?.list || '', // 大きい画像のURLを追加 (存在しない場合は小さい画像を使う)
+        imageUrl: item.imageURL?.list || '',
+        largeImageUrl: item.imageURL?.large || item.imageURL?.list || '',
         maker: item.iteminfo?.maker?.[0]?.name || '情報なし',
         actors: itemActors,
         genres: itemGenres,
@@ -225,30 +221,134 @@ async function searchSokmil(keyword) {
   }
 }
 
-// ▲▲▲ ここまで変更 ▲▲▲
 
+// --- DMM API 関連の関数 (ここから新規追加・変更) ---
 
 /**
- * AIにユーザーの記憶に基づいた架空のDMM作品リストを生成させる
+ * DMM APIを呼び出して検索結果を取得するヘルパー関数
+ * @param {URLSearchParams} params APIリクエストのパラメータ
+ * @returns {Promise<Array>} 検索結果のアイテム配列
  */
-async function generateDmmResults(userQuery) {
+async function fetchDmmApi(params) {
+    // DMM APIのエンドポイントURL
+    const url = `https://api.dmm.com/affiliate/v3/ItemList?${params.toString()}`;
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 9000); // 9秒でタイムアウト
+        const response = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            console.error(`DMM API request failed with status ${response.status} for params: "${params.toString()}"`);
+            return [];
+        }
+        const data = await response.json();
+        // DMM APIのレスポンス構造に合わせる
+        return data.result?.items || [];
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            console.error(`DMM API request timed out for params: "${params.toString()}"`);
+        } else {
+            console.error(`DMM API search failed for params "${params.toString()}":`, error);
+        }
+        return [];
+    }
+}
+
+/**
+ * DMM APIを検索し、関連性の高い順に結果を返す (Sokmil検索ロジックを流用)
+ */
+async function searchDmm(keyword) {
   try {
-    const queryForAI = userQuery || "還暦を迎えた60代とねっとりセックス";
-    
-    const prompt = `以下の記憶を元に、それに合致しそうな架空のDMM作品のリストを3つ生成してください。
-記憶: "${queryForAI}"
+    const searchQuery = keyword || "還暦を迎えた60代とねっとりセックス";
+
+    // 1. Gemini API を使用してキーワードを分類 (ロジックはSokmilと共通)
+    const keywordPrompt = `あなたは非常に優秀なAV作品の検索エンジンです。以下の文章から日本語の名詞または形容詞あるいは人物名を1~5つまで抽出し、さらに文章から推測されるAVのジャンルを3つ生成し、それら合計4~8つの単語を「女優名」「キーワード」の2つのカテゴリに分類してください。
+文章: "${searchQuery}"
 
 出力ルール:
-- JSON配列形式で、各作品に以下のキーを必ず含めてください: "id", "site", "title", "url", "imageUrl", "maker", "actors", "genres", "score", "reason"。
-- "actors"と"genres"の値は、カンマ区切りの文字列にしてください。(例: "女優A, 女優B")。
-- 存在しない項目は「情報なし」と記載してください。`;
+- JSONオブジェクト形式で出力してください。
+- キーは "keywords", "actors" としてください。
+- 各キーの値は、抽出や生成した単語の文字列配列にしてください。
+- 解説やMarkdownは一切含めないでください。
+- Googleのセーフティ機能に抵触しそうな単語は含めないでください。`;
 
-    const responseText = await callGeminiApi(prompt);
-    const finalResults = JSON.parse(responseText);
+    const resultText = await callGeminiApi(keywordPrompt);
+    if (!resultText) {
+      console.log("Gemini API returned an empty response. Returning no results.");
+      return { results: [], keywords: [] };
+    }
 
-    return { results: finalResults, keywords: [queryForAI] };
+    const classifiedKeywords = JSON.parse(resultText);
+    const { keywords = [], actors = [] } = classifiedKeywords;
+    const allKeywords = [...keywords, ...actors];
+
+    if (allKeywords.length === 0) {
+      return { results: [], keywords: [] };
+    }
+
+    // 2. 分類されたカテゴリごとにAPI検索のPromiseを作成 (DMM用にパラメータを修正)
+    const baseParams = {
+      api_id: DMM_API_KEY,
+      affiliate_id: DMM_AFFILIATE_ID,
+      site: 'DMM.R18',
+      output: 'json',
+      hits: 30,
+      sort: 'rank', // ランキング順で取得
+    };
+
+    // DMM APIのパラメータに合わせて `keyword` と `article: 'actress'` を設定
+    const keywordPromises = keywords.map(kw => fetchDmmApi(new URLSearchParams({ ...baseParams, keyword: kw })));
+    const actorPromises = actors.map(kw => fetchDmmApi(new URLSearchParams({ ...baseParams, keyword: kw, article: 'actress' })));
+
+    // 3. すべての検索を並列実行し、結果を一つにまとめる (ロジックはSokmilと共通)
+    const allPromises = [...actorPromises, ...keywordPromises];
+    const allResults = await Promise.all(allPromises);
+    const flattenedResults = allResults.flat();
+
+    if (flattenedResults.length === 0) {
+      return { results: [], keywords: allKeywords };
+    }
+
+    // 4. 作品IDごとに出現回数をカウントして、関連度をスコアリング (ロジックはSokmilと共通)
+    const frequencyCounter = new Map();
+    const productData = new Map();
+    flattenedResults.forEach(item => {
+      // DMMのIDは `content_id`
+      if (!item || !item.content_id) return;
+      const currentCount = frequencyCounter.get(item.content_id) || 0;
+      frequencyCounter.set(item.content_id, currentCount + 1);
+      if (!productData.has(item.content_id)) productData.set(item.content_id, item);
+    });
+
+    const sortedByFrequency = [...frequencyCounter.entries()].sort((a, b) => b[1] - a[1]);
+
+    // 5. 最終的なレスポンスデータを生成 (DMMのレスポンス構造に合わせる)
+    const totalKeywordsCount = allKeywords.length;
+    const finalResults = sortedByFrequency.map(([itemId, count]) => {
+      const item = productData.get(itemId);
+      // DMMの女優、ジャンル情報のキーに合わせる
+      const itemActors = item.iteminfo?.actress?.map(a => a.name).join(', ') || '情報なし';
+      const itemGenres = item.iteminfo?.genre?.map(g => g.name).join(', ') || '情報なし';
+
+      return {
+        id: item.content_id, // DMMのIDは content_id
+        site: 'DMM', // サイト名をDMMに
+        title: item.title,
+        url: item.affiliateURL, // DMMのアフィリエイトURL
+        imageUrl: item.imageURL?.list || '',
+        largeImageUrl: item.imageURL?.large || item.imageURL?.list || '',
+        maker: item.iteminfo?.maker?.[0]?.name || '情報なし',
+        actors: itemActors,
+        genres: itemGenres,
+        score: `${count}/${totalKeywordsCount}`,
+        reason: `キーワード(${totalKeywordsCount}個)のうち、${count}個の検索条件に一致しました。`
+      };
+    });
+
+    return { results: finalResults, keywords: allKeywords };
   } catch (e) {
-    console.error("DMM AI generation failed:", e);
-    throw new Error(`DMMのAI生成中にエラーが発生しました: ${e.message}`);
+    console.error("DMM search failed:", e);
+    throw new Error(`DMM検索中にエラーが発生しました: ${e.message}`);
   }
 }
