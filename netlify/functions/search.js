@@ -221,10 +221,38 @@ async function searchSokmil(keyword) {
   }
 }
 
+// --- DMM API 関連の関数 ---
 
 /**
- * DMM APIを検索し、関連性の高い順に結果を返す (Sokmil検索ロジックを流用)
+ * DMM APIを呼び出して検索結果を取得するヘルパー関数
+ * @param {URLSearchParams} params APIリクエストのパラメータ
+ * @returns {Promise<Array>} 検索結果のアイテム配列
  */
+async function fetchDmmApi(params) {
+    // DMM APIのエンドポイントURL
+    const url = `https://api.dmm.com/affiliate/v3/ItemList?${params.toString()}`;
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 9000); // 9秒でタイムアウト
+        const response = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            console.error(`DMM API request failed with status ${response.status} for params: "${params.toString()}"`);
+            return [];
+        }
+        const data = await response.json();
+        // DMM APIのレスポンス構造に合わせる
+        return data.result?.items || [];
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            console.error(`DMM API request timed out for params: "${params.toString()}"`);
+        } else {
+            console.error(`DMM API search failed for params "${params.toString()}":`, error);
+        }
+        return [];
+    }
+}
 async function searchDmm(keyword) {
   try {
     const searchQuery = keyword || "還暦を迎えた60代とねっとりセックス";
