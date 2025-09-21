@@ -222,39 +222,6 @@ async function searchSokmil(keyword) {
 }
 
 
-// --- DMM API 関連の関数 (ここから新規追加・変更) ---
-
-/**
- * DMM APIを呼び出して検索結果を取得するヘルパー関数
- * @param {URLSearchParams} params APIリクエストのパラメータ
- * @returns {Promise<Array>} 検索結果のアイテム配列
- */
-async function fetchDmmApi(params) {
-    // DMM APIのエンドポイントURL
-    const url = `https://api.dmm.com/affiliate/v3/ItemList?${params.toString()}`;
-    try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 9000); // 9秒でタイムアウト
-        const response = await fetch(url, { signal: controller.signal });
-        clearTimeout(timeoutId);
-
-        if (!response.ok) {
-            console.error(`DMM API request failed with status ${response.status} for params: "${params.toString()}"`);
-            return [];
-        }
-        const data = await response.json();
-        // DMM APIのレスポンス構造に合わせる
-        return data.result?.items || [];
-    } catch (error) {
-        if (error.name === 'AbortError') {
-            console.error(`DMM API request timed out for params: "${params.toString()}"`);
-        } else {
-            console.error(`DMM API search failed for params "${params.toString()}":`, error);
-        }
-        return [];
-    }
-}
-
 /**
  * DMM APIを検索し、関連性の高い順に結果を返す (Sokmil検索ロジックを流用)
  */
@@ -288,16 +255,19 @@ async function searchDmm(keyword) {
     }
 
     // 2. 分類されたカテゴリごとにAPI検索のPromiseを作成 (DMM用にパラメータを修正)
+    // ▼▼▼ ここを修正 ▼▼▼
     const baseParams = {
       api_id: DMM_API_KEY,
       affiliate_id: DMM_AFFILIATE_ID,
-      site: 'DMM.R18',
+      site: 'FANZA',      // サイト名をFANZAに指定
+      service: 'digital', // サービス（digital: 動画配信など）を追加
+      floor: 'videoa',    // フロア（videoa: 成人向け動画）を追加
       output: 'json',
       hits: 30,
-      sort: 'rank', // ランキング順で取得
+      sort: 'rank',
     };
+    // ▲▲▲ 修正ここまで ▲▲▲
 
-    // DMM APIのパラメータに合わせて `keyword` と `article: 'actress'` を設定
     const keywordPromises = keywords.map(kw => fetchDmmApi(new URLSearchParams({ ...baseParams, keyword: kw })));
     const actorPromises = actors.map(kw => fetchDmmApi(new URLSearchParams({ ...baseParams, keyword: kw, article: 'actress' })));
 
@@ -314,7 +284,6 @@ async function searchDmm(keyword) {
     const frequencyCounter = new Map();
     const productData = new Map();
     flattenedResults.forEach(item => {
-      // DMMのIDは `content_id`
       if (!item || !item.content_id) return;
       const currentCount = frequencyCounter.get(item.content_id) || 0;
       frequencyCounter.set(item.content_id, currentCount + 1);
@@ -327,15 +296,14 @@ async function searchDmm(keyword) {
     const totalKeywordsCount = allKeywords.length;
     const finalResults = sortedByFrequency.map(([itemId, count]) => {
       const item = productData.get(itemId);
-      // DMMの女優、ジャンル情報のキーに合わせる
       const itemActors = item.iteminfo?.actress?.map(a => a.name).join(', ') || '情報なし';
       const itemGenres = item.iteminfo?.genre?.map(g => g.name).join(', ') || '情報なし';
 
       return {
-        id: item.content_id, // DMMのIDは content_id
-        site: 'DMM', // サイト名をDMMに
+        id: item.content_id,
+        site: 'DMM',
         title: item.title,
-        url: item.affiliateURL, // DMMのアフィリエイトURL
+        url: item.affiliateURL,
         imageUrl: item.imageURL?.list || '',
         largeImageUrl: item.imageURL?.large || item.imageURL?.list || '',
         maker: item.iteminfo?.maker?.[0]?.name || '情報なし',
