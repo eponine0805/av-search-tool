@@ -292,7 +292,7 @@ async function searchDmm(keyword) {
       floor: 'videoa',    // フロア（videoa: 成人向け動画）を追加
       output: 'json',
       hits: 30,
-      sort: 'rank',
+      sort: 'match',
     };
     // ▲▲▲ 修正ここまで ▲▲▲
 
