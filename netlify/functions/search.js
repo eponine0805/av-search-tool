@@ -256,6 +256,9 @@ async function fetchDmmApi(params) {
 /**
  * DMM APIを検索し、articleパラメータを利用して女優を優先し、関連性の高い順に結果を返す
  */
+/**
+ * DMM APIを検索し、女優を優先して関連性の高い順に結果を返す（スコア重み付け方式）
+ */
 async function searchDmm(keyword) {
   try {
     const searchQuery = keyword || "還暦を迎えた60代とねっとりセックス";
@@ -301,30 +304,44 @@ async function searchDmm(keyword) {
     const keywordPromises = keywords.map(kw => fetchDmmApi(new URLSearchParams({ ...baseParams, keyword: kw })));
     const actorPromises = actors.map(kw => fetchDmmApi(new URLSearchParams({ ...baseParams, keyword: kw })));
 
-    // 2. すべての検索を並列実行し、結果を一つにまとめる (元のシンプルなロジックに戻す)
-    const allPromises = [...actorPromises, ...keywordPromises];
-    const allResults = await Promise.all(allPromises);
-    const flattenedResults = allResults.flat();
+    // 2. キーワード検索と女優検索を並列で実行し、結果を別々に保持
+    const [keywordResults, actorResults] = await Promise.all([
+        Promise.all(keywordPromises),
+        Promise.all(actorPromises)
+    ]);
 
-    if (flattenedResults.length === 0) {
-      return { results: [], keywords: allKeywords };
+    const flattenedKeywordResults = keywordResults.flat();
+    const flattenedActorResults = actorResults.flat();
+    
+    if (flattenedKeywordResults.length === 0 && flattenedActorResults.length === 0) {
+        return { results: [], keywords: allKeywords };
     }
 
-    // 3. 作品IDごとに出現回数をカウントして、関連度をスコアリング
+    // 3. スコアリング：女優の一致に高い重み（+2点）、キーワードの一致に（+1点）を与える
     const frequencyCounter = new Map();
     const productData = new Map();
-    flattenedResults.forEach(item => {
-      if (!item || !item.content_id) return;
-      const currentCount = frequencyCounter.get(item.content_id) || 0;
-      frequencyCounter.set(item.content_id, currentCount + 1);
-      if (!productData.has(item.content_id)) productData.set(item.content_id, item);
+
+    // 通常キーワードに一致した作品に +1 点
+    flattenedKeywordResults.forEach(item => {
+        if (!item || !item.content_id) return;
+        const currentCount = frequencyCounter.get(item.content_id) || 0;
+        frequencyCounter.set(item.content_id, currentCount + 1);
+        if (!productData.has(item.content_id)) productData.set(item.content_id, item);
     });
 
+    // 女優キーワードに一致した作品に +2 点（ボーナス点）
+    flattenedActorResults.forEach(item => {
+        if (!item || !item.content_id) return;
+        const currentCount = frequencyCounter.get(item.content_id) || 0;
+        frequencyCounter.set(item.content_id, currentCount + 2); // ★女優はスコアを優遇
+        if (!productData.has(item.content_id)) productData.set(item.content_id, item);
+    });
+    
+    // 4. 合計スコアの高い順に並び替え
     const sortedByFrequency = [...frequencyCounter.entries()].sort((a, b) => b[1] - a[1]);
 
-    // 4. 最終的なレスポンスデータを生成
-    const totalKeywordsCount = allKeywords.length;
-    const finalResults = sortedByFrequency.map(([itemId, count]) => {
+    // 5. 最終的なレスポンスデータを生成
+    const finalResults = sortedByFrequency.map(([itemId, score]) => {
       const item = productData.get(itemId);
       const itemActors = item.iteminfo?.actress?.map(a => a.name).join(', ') || '情報なし';
       const itemGenres = item.iteminfo?.genre?.map(g => g.name).join(', ') || '情報なし';
@@ -339,10 +356,12 @@ async function searchDmm(keyword) {
         maker: item.iteminfo?.maker?.[0]?.name || '情報なし',
         actors: itemActors,
         genres: itemGenres,
-        score: `${count}/${totalKeywordsCount}`, // 元のスコア表示に戻す
-        reason: `キーワード(${totalKeywordsCount}個)のうち、${count}個の検索条件に一致しました。` // 元の理由表示に戻す
+        score: `${score}点`,
+        reason: `女優・キーワードとの関連性からスコアを算出しました。`
       };
     });
+
+    // ▲▲▲ 修正ここまで ▲▲▲
 
     return { results: finalResults, keywords: allKeywords };
   } catch (e) {
