@@ -253,11 +253,13 @@ async function fetchDmmApi(params) {
         return [];
     }
 }
+/**
+ * DMM APIを検索し、関連性の高い順に結果を返す
+ */
 async function searchDmm(keyword) {
   try {
     const searchQuery = keyword || "還暦を迎えた60代とねっとりセックス";
 
-    // 1. Gemini API を使用してキーワードを分類 (ロジックはSokmilと共通)
     const keywordPrompt = `あなたは非常に優秀なAV作品の検索エンジンです。以下の文章から日本語の名詞または形容詞あるいは人物名を1~5つまで抽出し、さらに文章から推測されるAVのジャンルを3つ生成し、それら合計4~8つの単語を「女優名」「キーワード」の2つのカテゴリに分類してください。
 文章: "${searchQuery}"
 
@@ -276,31 +278,29 @@ async function searchDmm(keyword) {
 
     const classifiedKeywords = JSON.parse(resultText);
     const { keywords = [], actors = [] } = classifiedKeywords;
+    // 女優名もキーワードも、すべて同じキーワードとして扱う
     const allKeywords = [...keywords, ...actors];
 
     if (allKeywords.length === 0) {
       return { results: [], keywords: [] };
     }
 
-    // 2. 分類されたカテゴリごとにAPI検索のPromiseを作成 (DMM用にパラメータを修正)
-    // ▼▼▼ ここを修正 ▼▼▼
     const baseParams = {
       api_id: DMM_API_KEY,
       affiliate_id: DMM_AFFILIATE_ID,
-      site: 'FANZA',      // サイト名をFANZAに指定
-      service: 'digital', // サービス（digital: 動画配信など）を追加
-      floor: 'videoa',    // フロア（videoa: 成人向け動画）を追加
+      site: 'FANZA',
+      service: 'digital',
+      floor: 'videoa',
       output: 'json',
       hits: 30,
       sort: 'match',
     };
-    // ▲▲▲ 修正ここまで ▲▲▲
 
-    const keywordPromises = keywords.map(kw => fetchDmmApi(new URLSearchParams({ ...baseParams, keyword: kw })));
-    const actorPromises = actors.map(kw => fetchDmmApi(new URLSearchParams({ ...baseParams, keyword: kw, article: 'actress' })));
+    // 'article' パラメータを使わず、全てのキーワードで ItemList API を検索する
+    const allPromises = allKeywords.map(kw => 
+      fetchDmmApi(new URLSearchParams({ ...baseParams, keyword: kw }))
+    );
 
-    // 3. すべての検索を並列実行し、結果を一つにまとめる (ロジックはSokmilと共通)
-    const allPromises = [...actorPromises, ...keywordPromises];
     const allResults = await Promise.all(allPromises);
     const flattenedResults = allResults.flat();
 
@@ -308,7 +308,6 @@ async function searchDmm(keyword) {
       return { results: [], keywords: allKeywords };
     }
 
-    // 4. 作品IDごとに出現回数をカウントして、関連度をスコアリング (ロジックはSokmilと共通)
     const frequencyCounter = new Map();
     const productData = new Map();
     flattenedResults.forEach(item => {
@@ -320,7 +319,6 @@ async function searchDmm(keyword) {
 
     const sortedByFrequency = [...frequencyCounter.entries()].sort((a, b) => b[1] - a[1]);
 
-    // 5. 最終的なレスポンスデータを生成 (DMMのレスポンス構造に合わせる)
     const totalKeywordsCount = allKeywords.length;
     const finalResults = sortedByFrequency.map(([itemId, count]) => {
       const item = productData.get(itemId);
