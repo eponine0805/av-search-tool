@@ -134,7 +134,7 @@ async function fetchSokmilApi(params) {
 
 
 /**
- * Sokmil APIを検索し、関連性の高い順に結果を返す（変更なし）
+ * Sokmil APIを検索し、女優を優先して関連性の高い順に結果を返す（スコア重み付け方式）
  */
 async function searchSokmil(keyword) {
   try {
@@ -171,30 +171,50 @@ async function searchSokmil(keyword) {
         hits: 30,
     };
 
+    // ▼▼▼ ここからロジックを修正 ▼▼▼
+
+    // 1. 「キーワード」と「女優」でAPIリクエストを分けて作成
     const keywordPromises = keywords.map(kw => fetchSokmilApi(new URLSearchParams({ ...baseParams, keyword: kw })));
     const actorPromises = actors.map(kw => fetchSokmilApi(new URLSearchParams({ ...baseParams, keyword: kw, article: 'actor' })));
 
-    const allPromises = [...actorPromises, ...keywordPromises];
-    const allResults = await Promise.all(allPromises);
-    const flattenedResults = allResults.flat();
+    // 2. キーワード検索と女優検索を並列で実行し、結果を別々に保持
+    const [keywordResults, actorResults] = await Promise.all([
+        Promise.all(keywordPromises),
+        Promise.all(actorPromises)
+    ]);
 
-    if (flattenedResults.length === 0) {
-      return { results: [], keywords: allKeywords };
+    const flattenedKeywordResults = keywordResults.flat();
+    const flattenedActorResults = actorResults.flat();
+
+    if (flattenedKeywordResults.length === 0 && flattenedActorResults.length === 0) {
+        return { results: [], keywords: allKeywords };
     }
 
+    // 3. スコアリング：女優の一致に高い重み（+2点）、キーワードの一致に（+1点）を与える
     const frequencyCounter = new Map();
     const productData = new Map();
-    flattenedResults.forEach(item => {
-      if (!item || !item.id) return;
-      const currentCount = frequencyCounter.get(item.id) || 0;
-      frequencyCounter.set(item.id, currentCount + 1);
-      if (!productData.has(item.id)) productData.set(item.id, item);
+
+    // 通常キーワードに一致した作品に +1 点
+    flattenedKeywordResults.forEach(item => {
+        if (!item || !item.id) return;
+        const currentCount = frequencyCounter.get(item.id) || 0;
+        frequencyCounter.set(item.id, currentCount + 1);
+        if (!productData.has(item.id)) productData.set(item.id, item);
     });
 
+    // 女優キーワードに一致した作品に +2 点（ボーナス点）
+    flattenedActorResults.forEach(item => {
+        if (!item || !item.id) return;
+        const currentCount = frequencyCounter.get(item.id) || 0;
+        frequencyCounter.set(item.id, currentCount + 2); // ★女優はスコアを優遇
+        if (!productData.has(item.id)) productData.set(item.id, item);
+    });
+
+    // 4. 合計スコアの高い順に並び替え
     const sortedByFrequency = [...frequencyCounter.entries()].sort((a, b) => b[1] - a[1]);
 
-    const totalKeywordsCount = allKeywords.length;
-    const finalResults = sortedByFrequency.map(([itemId, count]) => {
+    // 5. 最終的なレスポンスデータを生成
+    const finalResults = sortedByFrequency.map(([itemId, score]) => {
       const item = productData.get(itemId);
       const itemActors = item.iteminfo?.actor?.map(a => a.name).join(', ') || '情報なし';
       const itemGenres = item.iteminfo?.genre?.map(g => g.name).join(', ') || '情報なし';
@@ -209,10 +229,12 @@ async function searchSokmil(keyword) {
         maker: item.iteminfo?.maker?.[0]?.name || '情報なし',
         actors: itemActors,
         genres: itemGenres,
-        score: `${count}/${totalKeywordsCount}`,
-        reason: `キーワード(${totalKeywordsCount}個)のうち、${count}個の検索条件に一致しました。`
+        score: `${score}点`,
+        reason: `女優・キーワードとの関連性からスコアを算出しました。`
       };
     });
+    
+    // ▲▲▲ 修正ここまで ▲▲▲
 
     return { results: finalResults, keywords: allKeywords };
   } catch (e) {
