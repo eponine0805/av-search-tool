@@ -172,7 +172,7 @@ async function searchSokmil(keyword) {
     };
 
     const keywordPromises = keywords.map(kw => fetchSokmilApi(new URLSearchParams({ ...baseParams, keyword: kw })));
-    const actorPromises = actors.map(kw => fetchSokmilApi(new URLSearchParams({ ...baseParams, keyword: kw, article: 'actor' })));
+    const actorPromises = actors.map(kw => fetchSokmilApi(new URLSearchParams({ ...baseParams, article: 'actress' })));
 
     const allPromises = [...actorPromises, ...keywordPromises];
     const allResults = await Promise.all(allPromises);
